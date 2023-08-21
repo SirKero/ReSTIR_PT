@@ -573,6 +573,9 @@
     <ClInclude Include="Experimental\ScreenSpaceReSTIR\ScreenSpaceReSTIR.h">
       <Filter>Experimental\ScreenSpaceReSTIR</Filter>
     </ClInclude>
+    <ClInclude Include="Rendering\AccelerationStructure\CustomAccelerationStructure.h">
+      <Filter>Rendering\AccelerationStructure</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Core">
@@ -751,6 +754,9 @@
     </Filter>
     <Filter Include="Experimental\Scene\Material">
       <UniqueIdentifier>{7961c961-acd2-446a-b021-ae3ca612b684}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Rendering\AccelerationStructure">
+      <UniqueIdentifier>{f3a043ad-d8e8-4535-8ba4-cc4ae327e38c}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -1366,6 +1372,9 @@
     </ClCompile>
     <ClCompile Include="Experimental\ScreenSpaceReSTIR\ScreenSpaceReSTIR.cpp">
       <Filter>Experimental\ScreenSpaceReSTIR</Filter>
+    </ClCompile>
+    <ClCompile Include="Rendering\AccelerationStructure\CustomAccelerationStructure.cpp">
+      <Filter>Rendering\AccelerationStructure</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

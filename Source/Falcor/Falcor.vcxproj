@@ -130,6 +130,7 @@
     <ClInclude Include="Raytracing\RtStateObjectHelper.h" />
     <ClInclude Include="Raytracing\ShaderTable.h" />
     <ClInclude Include="RenderGraph\RenderPassHelpers.h" />
+    <ClInclude Include="Rendering\AccelerationStructure\CustomAccelerationStructure.h" />
     <ClInclude Include="Rendering\Lights\EmissiveLightSampler.h" />
     <ClInclude Include="Rendering\Lights\EmissivePowerSampler.h" />
     <ClInclude Include="Rendering\Lights\EmissiveUniformSampler.h" />
@@ -690,6 +691,7 @@
     <ClCompile Include="Raytracing\RtStateObject.cpp" />
     <ClCompile Include="Raytracing\ShaderTable.cpp" />
     <ClCompile Include="RenderGraph\RenderPassHelpers.cpp" />
+    <ClCompile Include="Rendering\AccelerationStructure\CustomAccelerationStructure.cpp" />
     <ClCompile Include="Rendering\Lights\EmissiveLightSampler.cpp" />
     <ClCompile Include="Rendering\Lights\EmissivePowerSampler.cpp" />
     <ClCompile Include="Rendering\Lights\EmissiveUniformSampler.cpp" />
