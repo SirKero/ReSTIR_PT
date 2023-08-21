@@ -7,6 +7,7 @@
  # distribution of this software and related documentation without an express
  # license agreement from NVIDIA CORPORATION is strictly prohibited.
  **************************************************************************/
+#include "stdafx.h"
 #include "ScreenSpaceReSTIR.h"
 #include "Utils/Color/ColorHelpers.slang"
 

@@ -1,0 +1,46 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="ReSTIRFG.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="ReSTIRFG.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Shader">
+      <UniqueIdentifier>{e6d4d38f-6e25-421b-9c6c-82b98c3b5e62}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ShaderSource Include="CollectPhotons.rt.slang">
+      <Filter>Shader</Filter>
+    </ShaderSource>
+    <ShaderSource Include="FinalGatherData.slang">
+      <Filter>Shader</Filter>
+    </ShaderSource>
+    <ShaderSource Include="FinalShading.cs.slang">
+      <Filter>Shader</Filter>
+    </ShaderSource>
+    <ShaderSource Include="GenerateFinalGatherSamples.rt.slang">
+      <Filter>Shader</Filter>
+    </ShaderSource>
+    <ShaderSource Include="GeneratePhotons.rt.slang">
+      <Filter>Shader</Filter>
+    </ShaderSource>
+    <ShaderSource Include="Hash.slang">
+      <Filter>Shader</Filter>
+    </ShaderSource>
+    <ShaderSource Include="ResamplingPass.cs.slang">
+      <Filter>Shader</Filter>
+    </ShaderSource>
+    <ShaderSource Include="Reservoir.slang">
+      <Filter>Shader</Filter>
+    </ShaderSource>
+    <ShaderSource Include="SurfaceDataFG.slang">
+      <Filter>Shader</Filter>
+    </ShaderSource>
+    <ShaderSource Include="TraceTransmissionDelta.rt.slang">
+      <Filter>Shader</Filter>
+    </ShaderSource>
+  </ItemGroup>
+</Project>

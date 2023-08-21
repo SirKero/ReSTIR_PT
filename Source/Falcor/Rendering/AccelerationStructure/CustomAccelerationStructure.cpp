@@ -147,7 +147,7 @@ namespace Falcor
             pDevice5->GetRaytracingAccelerationStructurePrebuildInfo(&blas.buildInputs, &blas.prebuildInfo);
 
             // Figure out the padded allocation sizes to have proper alignment.
-            assert(blas.prebuildInfo.resultDataMaxSize > 0);
+            assert(blas.prebuildInfo.ResultDataMaxSizeInBytes > 0);
             blas.blasByteSize = align_to((uint64_t)D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT, blas.prebuildInfo.ResultDataMaxSizeInBytes);
 
             uint64_t scratchByteSize = std::max(blas.prebuildInfo.ScratchDataSizeInBytes, blas.prebuildInfo.UpdateScratchDataSizeInBytes);
