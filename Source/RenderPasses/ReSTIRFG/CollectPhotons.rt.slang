@@ -272,7 +272,7 @@ void rayGen()
     if (isnan(Li) || isinf(Li))
         fgValid = false;
     fgData.posW = sd.computeNewRayOrigin();
-    fgData.normal = bsdfProperties.guideNormal;
+    fgData.normal = sd.N;
     fgData.flux = fgRadiance;
     fgData.jacobianDeterminant = fgValid ? jacoDeter : -1.f;    //Negative jacobian determinant is an invalid sample
 

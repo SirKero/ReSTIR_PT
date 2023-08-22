@@ -5,7 +5,6 @@ import Utils.Math.PackedFormats;
 import Utils.Math.FormatConversion;
 
 import Scene.RaytracingInline;
-import Scene.Material.ShadingUtils;
 import Utils.Sampling.SampleGenerator;
 import Utils.Math.MathHelpers;
 import Utils.Color.ColorHelpers;
@@ -213,7 +212,7 @@ void temporalResampling(uint2 pixel, inout Reservoir r, inout FGData fgSample, i
         {
             SceneRayQuery < 0 > rayQuery;
             distance *= kRayEpsilon;
-            const Ray ray = Ray(temporalSurface.posW, ls.dir, 0.f, distance);
+            const RayDesc ray = { temporalSurface.posW, 0.0f, ls.dir, distance };
             if (!rayQuery.traceVisibilityRay(ray, RAY_FLAG_NONE, 0xff))
             {
                 ps = 0;
@@ -336,7 +335,7 @@ void spatialResampling(uint2 pixel, inout Reservoir r, inout FGData fgSample, in
             {
                 SceneRayQuery < 0 > rayQuery;
                 dist *= kRayEpsilon;
-                const Ray ray = Ray(biasSurface.posW, ls.dir, 0.0f, dist);
+                const RayDesc ray = { biasSurface.posW, 0.0f, ls.dir, dist };
                 if (!rayQuery.traceVisibilityRay(ray, RAY_FLAG_CULL_NON_OPAQUE, 0xff))
                 {
                     ps = 0.0f;
@@ -527,7 +526,7 @@ void spatiotemporalResampling(uint2 pixel, inout Reservoir r, inout FGData fgSam
             {
                 SceneRayQuery < 0 > rayQuery;
                 dist *= kRayEpsilon;
-                const Ray ray = Ray(biasSurface.posW, ls.dir, 0.0f, dist);
+                const RayDesc ray = { biasSurface.posW, 0.0f, ls.dir, dist };
                 if (!rayQuery.traceVisibilityRay(ray, RAY_FLAG_CULL_NON_OPAQUE, 0xff))
                 {
                     ps = 0.0f;

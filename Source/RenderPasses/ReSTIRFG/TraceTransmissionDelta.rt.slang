@@ -34,8 +34,6 @@ RWTexture2D<PackedHitInfo> gOutVBuffer;
 RWTexture2D<float4> gOutViewDir;
 RWTexture2D<float> gOutRayDist;
 RWTexture2D<float4> gOutThp;
-RWTexture2D<float4> gOutDiffuseReflectance;
-RWTexture2D<float4> gOutSpecularReflectance;
 
 #define is_valid(name) (is_valid_##name != 0)
 
@@ -172,6 +170,4 @@ void rayGen()
     gOutViewDir[launchIndex] = float4(viewDir, 1);
     gOutRayDist[launchIndex] = rayDist;
     gOutThp[launchIndex] = float4(thp, 1);
-    if (is_valid(gOutDiffuseReflectance)) gOutDiffuseReflectance[launchIndex] = float4(diffuseReflectance, 1.f);
-    if (is_valid(gOutSpecularReflectance)) gOutSpecularReflectance[launchIndex] = float4(specularReflectance, 1.f);
 }

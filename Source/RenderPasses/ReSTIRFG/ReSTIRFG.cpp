@@ -56,20 +56,10 @@ namespace
 
     const std::string kOutputColor = "color";
     const std::string kOutputEmission = "emission";
-    const std::string kOutputDiffuseRadiance = "diffuseRadiance";
-    const std::string kOutputSpecularRadiance = "specularRadiance";
-    const std::string kOutputDiffuseReflectance = "diffuseReflectance";
-    const std::string kOutputSpecularReflectance = "specularReflectance";
-    const std::string kOutputResidualRadiance = "residualRadiance";     //The rest (transmission, delta)
 
     const Falcor::ChannelList kOutputChannels{
         {kOutputColor, "gOutColor", "Output Color (linear)", true /*optional*/, ResourceFormat::RGBA32Float},
-        { kOutputEmission,               "gOutEmission",             "Output Emission", true /*optional*/, ResourceFormat::RGBA32Float },
-        { kOutputDiffuseRadiance,        "gOutDiffuseRadiance",      "Output demodulated diffuse color (linear)", true /*optional*/, ResourceFormat::RGBA32Float },
-        { kOutputSpecularRadiance,       "gOutSpecularRadiance",     "Output demodulated specular color (linear)", true /*optional*/, ResourceFormat::RGBA32Float },
-        { kOutputDiffuseReflectance,     "gOutDiffuseReflectance",   "Output primary surface diffuse reflectance", true /*optional*/, ResourceFormat::RGBA16Float },
-        { kOutputSpecularReflectance,    "gOutSpecularReflectance",  "Output primary surface specular reflectance", true /*optional*/, ResourceFormat::RGBA16Float },
-        { kOutputResidualRadiance,       "gOutResidualRadiance",     "Output residual color (transmission/delta)", true /*optional*/, ResourceFormat::RGBA32Float },
+        { kOutputEmission,               "gOutEmission",             "Output Emission", true /*optional*/, ResourceFormat::RGBA32Float }
     };
 
     const Gui::DropdownList kResamplingModeList{
@@ -183,7 +173,7 @@ void ReSTIRFG::execute(RenderContext* pRenderContext, const RenderData& renderDa
 
     collectPhotons(pRenderContext, renderData);
 
-    /*
+    
     //Do resampling
     if (mReservoirValid && (mRenderMode == RenderMode::ReSTIRFG))
         resamplingPass(pRenderContext, renderData);
@@ -197,7 +187,7 @@ void ReSTIRFG::execute(RenderContext* pRenderContext, const RenderData& renderDa
 
 
     //if (mpRTXDI) mpRTXDI->endFrame(pRenderContext);
-    */
+    
     mReservoirValid = true;
     mFrameCount++;
 }
@@ -609,10 +599,6 @@ void ReSTIRFG::traceTransmissiveDelta(RenderContext* pRenderContext, const Rende
     var["gOutViewDir"] = mpViewDir;
     var["gOutRayDist"] = mpRayDist;
     var["gOutVBuffer"] = mpVBuffer;
-    if (renderData[kOutputDiffuseReflectance])
-        var["gOutDiffuseReflectance"] = renderData[kOutputDiffuseReflectance]->asTexture();
-    if (renderData[kOutputSpecularReflectance])
-        var["gOutSpecularReflectance"] = renderData[kOutputSpecularReflectance]->asTexture();
 
     // Create dimensions based on the number of VPLs
     assert(mScreenRes.x > 0 && mScreenRes.y > 0);
@@ -844,9 +830,9 @@ void ReSTIRFG::collectPhotons(RenderContext* pRenderContext, const RenderData& r
     var["gVBuffer"] = mpVBuffer;
     var["gView"] = mpViewDir;
 
-    //if (finalGatherRenderMode)
+    if (finalGatherRenderMode)
         var["gColor"] = renderData[kOutputColor]->asTexture();
-    //else
+    else
         var["gCausticOut"] = mpCausticRadiance;
 
     mpPhotonAS->bindTlas(var, "gPhotonAS");
@@ -883,6 +869,7 @@ void ReSTIRFG::resamplingPass(RenderContext* pRenderContext, const RenderData& r
         defines.add("MODE_TEMPORAL", mResamplingMode == ResamplingMode::Temporal ? "1" : "0");
         defines.add("MODE_SPATIAL", mResamplingMode == ResamplingMode::Spartial ? "1" : "0");
         defines.add("BIAS_CORRECTION_MODE", std::to_string((uint)mBiasCorrectionMode));
+        defines.add("_USE_LEGACY_SHADING_CODE", "0");
 
         mpResamplingPass = ComputePass::create(desc, defines, true);
     }
@@ -968,6 +955,7 @@ void ReSTIRFG::finalShadingPass(RenderContext* pRenderContext, const RenderData&
         defines.add(getValidResourceDefines(kInputChannels, renderData));
         defines.add("USE_REDUCED_RESERVOIR_FORMAT", mUseReducedReservoirFormat ? "1" : "0");
         defines.add("USE_ENV_BACKROUND", mpScene->useEnvBackground() ? "1" : "0");
+        defines.add("_USE_LEGACY_SHADING_CODE", "0");
         //if (mpRTXDI) defines.add(mpRTXDI->getDefines());
         //defines.add("USE_RTXDI", mpRTXDI ? "1" : "0");
         defines.add("USE_RTXDI", "0");

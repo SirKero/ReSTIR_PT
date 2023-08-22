@@ -5,9 +5,15 @@ import Utils.Math.PackedFormats;
 import Utils.Math.FormatConversion;
 
 import Scene.RaytracingInline;
+import Scene.Raytracing;
 import Utils.Sampling.SampleGenerator;
-import Rendering.Materials.IsotropicGGX;
+import Scene.HitInfo;
 import Utils.Math.MathHelpers;
+import Utils.Sampling.SampleGenerator;
+import Rendering.Materials.StandardMaterial;
+import Rendering.Materials.MaterialShading;
+import Rendering.Materials.Microfacet;
+import Rendering.Materials.Fresnel;
 import Utils.Color.ColorHelpers;
 //import Rendering.RTXDI.RTXDI;
 
@@ -38,11 +44,6 @@ Texture2D<float4> gCausticRadiance;
 Texture2D<float4> gThp;
 RWTexture2D<float4> gOutColor;
 RWTexture2D<float4> gOutEmission;
-RWTexture2D<float4> gOutDiffuseRadiance;
-RWTexture2D<float4> gOutSpecularRadiance;
-Texture2D<float4> gOutDiffuseReflectance;
-Texture2D<float4> gOutSpecularReflectance;
-RWTexture2D<float4> gOutResidualRadiance;
 
 #define is_valid(name) (is_valid_##name != 0)
 
@@ -61,12 +62,13 @@ uint index2Dto1D(uint2 idx, uint width){
     return idx.x + width * idx.y;
 }
 
-ShadingData loadShadingData(const HitInfo hit, const float3 rayDir, const ITextureSampler lod)
+//Load in shading data from hit and direction
+ShadingData loadShadingData(const HitInfo hit, const float3 rayDir)
 {
     const TriangleHit triangleHit = hit.getTriangleHit();
     VertexData v = gScene.getVertexData(triangleHit);
     uint materialID = gScene.getMaterialID(triangleHit.instanceID);
-    ShadingData sd = gScene.materials.prepareShadingData(v, materialID, -rayDir, lod);
+    ShadingData sd = prepareShadingData(v, materialID, gScene.materials[materialID], gScene.materialResources[materialID], -rayDir, 0.f);
     
     return sd;
 }
@@ -88,22 +90,11 @@ void getEmissiveLight(uint idx,in float3 worldPos, out float distance ,out float
 [numthreads(16, 16, 1)]
 void main(uint2 pixel : SV_DispatchThreadID)
 {
-    bool valid = true;
-    //Load Reflectance (was set before)
-    float3 diffuseReflectance = { };
-    float3 specularReflectance = { };
-    if (is_valid(gOutDiffuseReflectance))
-        diffuseReflectance = gOutDiffuseReflectance[pixel].xyz;
-    if (is_valid(gOutSpecularReflectance))
-        specularReflectance = gOutSpecularReflectance[pixel].xyz;
-    
+    bool valid = true;    
     
     //Outputs
     float3 color = { };
     float3 emission = { };
-    float3 diffuseIllumination = { };
-    float3 specularIllumination = { };
-    float3 resuidualIllumination = { };
     float hitT = 1.f;
     uint hitTSamples = 0;
     
@@ -117,16 +108,10 @@ void main(uint2 pixel : SV_DispatchThreadID)
     if (hitInfo.isValid())
     {
         float3 thp = gThp[pixel].xyz;
-        let lod = ExplicitLodTextureSampler(0.f);
-        
+             
     
         //Get Material properties
-        uint hints = (uint) MaterialInstanceHints::AdjustShadingNormal;
-        ShadingData sd = loadShadingData(hitInfo, viewDir, lod);
-        let bsdf = gScene.materials.getMaterialInstance(sd, lod, hints);
-        let bsdfProperties = bsdf.getProperties(sd);
-
-   
+        ShadingData sd = loadShadingData(hitInfo, viewDir);   
 
         // Variables for RTXDI and ReSTIRFG
         float3 diffuse = { };
@@ -134,7 +119,7 @@ void main(uint2 pixel : SV_DispatchThreadID)
         float distance = 1.f;
         float3 dir = { };
         float3 Li = { };
-
+/*
     #if USE_RTXDI
         //Get Final Sample from RTXDI
         bool rtxdiValid = gRTXDI.getFinalSample(pixel, dir, distance, Li);
@@ -161,7 +146,7 @@ void main(uint2 pixel : SV_DispatchThreadID)
         }
     
     #endif
-
+*/
     #if USE_RESTIRFG
         //Get reservoir
         bool validIndirectReservoir = true;
@@ -181,7 +166,7 @@ void main(uint2 pixel : SV_DispatchThreadID)
         {
         // Ray Query for shadow test; <1> means enabled alpha testing; TODO: Add static const for alpha test
             SceneRayQuery < 1 > rayQuery;
-            const Ray ray = Ray(sd.computeNewRayOrigin(), dir, 0.f, distance * kRayEpsilon);
+            const RayDesc ray = { sd.computeNewRayOrigin(), 0.0f, dir, distance * kRayEpsilon };
             if (!rayQuery.traceVisibilityRay(ray, RAY_FLAG_NONE, 0xff))
                 validIndirectReservoir = false;
         }
@@ -189,12 +174,8 @@ void main(uint2 pixel : SV_DispatchThreadID)
     
         if (validIndirectReservoir)
         {
-            sd.mtl.setActiveLobes((uint) LobeType::Diffuse);
-            diffuse += bsdf.eval(sd, dir, sg) * Li;
+            diffuse += evalBSDFCosine(sd, dir) * Li;
             
-            sd.mtl.setActiveLobes((uint) LobeType::SpecularReflection);
-            specular += bsdf.eval(sd, dir, sg) * Li;
-
             hitTSamples++;
             hitT += distance;
             hitT *= 1.f / hitTSamples;
@@ -202,21 +183,18 @@ void main(uint2 pixel : SV_DispatchThreadID)
         diffuse += gCausticRadiance[pixel].xyz;        
     #endif
         
-        color += diffuse + specular;    //Add diffuse and specular parts together
+        color += diffuse;    //Add diffuse and specular parts together
         color *= thp;                   //Use the throughput
-        emission += bsdfProperties.emission; //Emission
+        emission += sd.emissive; //Emission
         color += emission;  //Do this or demodulate it?
-
+        
         //If only RTXDI is used, add the previous calculated light color
     #if USE_RTXDI && !USE_RESTIRFG
             float3 fgRadiance = gOutColor[pixel].xyz;
             color += fgRadiance * thp;
             diffuse += fgRadiance * thp;  //TODO do this properly
     #endif
-
-         // Use sum of reflection/transmission albedo as they are denoised together.
-        diffuseIllumination = (diffuse * thp) / diffuseReflectance;
-        specularIllumination = (specular * thp) / specularReflectance;
+        
     }
     else
     {
@@ -230,11 +208,8 @@ void main(uint2 pixel : SV_DispatchThreadID)
             }
         }
     }
-    
-    
-    if (is_valid(gOutColor)) gOutColor[pixel] = float4(color, 1.f);
+        
+    if (is_valid(gOutColor))
+        gOutColor[pixel] = float4(color, 1.f);
     if (is_valid(gOutEmission)) gOutEmission[pixel] = float4(emission, 1.f);
-    if (is_valid(gOutDiffuseRadiance)) gOutDiffuseRadiance[pixel] = float4(diffuseIllumination, hitT);
-    if (is_valid(gOutSpecularRadiance))gOutSpecularRadiance[pixel] = float4(specularIllumination, hitT);
-    if (is_valid(gOutResidualRadiance))  gOutResidualRadiance[pixel] = float4(0.f); //TODO 
 }
