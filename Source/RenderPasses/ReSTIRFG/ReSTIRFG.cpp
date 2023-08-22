@@ -46,12 +46,14 @@ namespace
     //Render Pass inputs and outputs
     const std::string kInputVBuffer = "vbuffer";
     const std::string kInputMotionVectors = "mvec";
+    const std::string kInputReSTIRColor = "colorReSTIR";
     //const std::string kInputViewDir = "viewW";
     //const std::string kInputRayDistance = "rayDist";
 
     const Falcor::ChannelList kInputChannels{
         {kInputVBuffer, "gVBuffer", "Visibility buffer in packed format" , false, ResourceFormat::Unknown },
         { kInputMotionVectors, "gMotionVectors", "Motion vector buffer (float format)", true /* optional */, ResourceFormat::RG32Float },
+        { kInputReSTIRColor, "gReSTIRColor", "Final ReSTIR Color", true /*optional*/, ResourceFormat::Unknown},
     };
 
     const std::string kOutputColor = "color";
@@ -81,7 +83,7 @@ namespace
 
     const Gui::DropdownList kDirectLightRenderModeList{
         {(uint)ReSTIRFG::DirectLightingMode::None, "None"},
-        { (uint)ReSTIRFG::DirectLightingMode::RTXDI, "RTXDI" }
+        { (uint)ReSTIRFG::DirectLightingMode::RTXDI, "ReSTIR" }
     };
 }
 
@@ -958,7 +960,7 @@ void ReSTIRFG::finalShadingPass(RenderContext* pRenderContext, const RenderData&
         defines.add("_USE_LEGACY_SHADING_CODE", "0");
         //if (mpRTXDI) defines.add(mpRTXDI->getDefines());
         //defines.add("USE_RTXDI", mpRTXDI ? "1" : "0");
-        defines.add("USE_RTXDI", "0");
+        defines.add("USE_DIRECT_LIGHT", mDirectLightMode == DirectLightingMode::RTXDI ? "1" : "0");
         defines.add("USE_RESTIRFG", mRenderMode == RenderMode::ReSTIRFG ? "1" : "0");
 
         mpFinalShadingPass = ComputePass::create(desc, defines, true);
@@ -966,11 +968,12 @@ void ReSTIRFG::finalShadingPass(RenderContext* pRenderContext, const RenderData&
     assert(mpFinalShadingPass);
 
     //if (mpRTXDI) mpFinalShadingPass->getProgram()->addDefines(mpRTXDI->getDefines());  //TODO only set once?
-    mpFinalShadingPass->getProgram()->addDefine("USE_RTXDI", "0");
+    mpFinalShadingPass->getProgram()->addDefine("USE_DIRECT_LIGHT", mDirectLightMode == DirectLightingMode::RTXDI ? "1" : "0");
     mpFinalShadingPass->getProgram()->addDefine("USE_RESTIRFG", mRenderMode == RenderMode::ReSTIRFG ? "1" : "0");
     mpFinalShadingPass->getProgram()->addDefine("USE_REDUCED_RESERVOIR_FORMAT", mUseReducedReservoirFormat ? "1" : "0");
     mpFinalShadingPass->getProgram()->addDefine("USE_ENV_BACKROUND", mpScene->useEnvBackground() ? "1" : "0");
     // For optional I/O resources, set 'is_valid_<name>' defines to inform the program of which ones it can access.
+    mpFinalShadingPass->getProgram()->addDefines(getValidResourceDefines(kInputChannels, renderData));
     mpFinalShadingPass->getProgram()->addDefines(getValidResourceDefines(kOutputChannels, renderData));
 
     // Set variables
@@ -986,6 +989,7 @@ void ReSTIRFG::finalShadingPass(RenderContext* pRenderContext, const RenderData&
     var["gReservoir"] = mpReservoirBuffer[reservoirIndex];
     var["gFGSampleData"] = mpFGSampelDataBuffer[reservoirIndex];
 
+    var["gReSTIRColor"] = renderData[kInputReSTIRColor]->asTexture();
     var["gThp"] = mpThp;
     var["gView"] = mpViewDir;
     var["gVBuffer"] = mpVBuffer;

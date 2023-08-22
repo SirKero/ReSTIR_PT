@@ -42,6 +42,7 @@ Texture2D<float2> gMVec;
 Texture2D<float4> gView;
 Texture2D<float4> gCausticRadiance;
 Texture2D<float4> gThp;
+Texture2D<float4> gReSTIRColor;
 RWTexture2D<float4> gOutColor;
 RWTexture2D<float4> gOutEmission;
 
@@ -56,6 +57,7 @@ cbuffer PerFrame
 
 static const float kRayEpsilon = 0.99f;
 static const bool kUseEnvBackground = USE_ENV_BACKROUND;
+static const bool kUseDirectLight = USE_DIRECT_LIGHT;
 
 
 uint index2Dto1D(uint2 idx, uint width){
@@ -180,21 +182,24 @@ void main(uint2 pixel : SV_DispatchThreadID)
             hitT += distance;
             hitT *= 1.f / hitTSamples;
         }
-        diffuse += gCausticRadiance[pixel].xyz;        
+        diffuse += gCausticRadiance[pixel].xyz;
+        color += diffuse * thp; //Add diffuse and specular parts together
     #endif
         
-        color += diffuse;    //Add diffuse and specular parts together
-        color *= thp;                   //Use the throughput
-        emission += sd.emissive; //Emission
-        color += emission;  //Do this or demodulate it?
+       
+        
+        
         
         //If only RTXDI is used, add the previous calculated light color
-    #if USE_RTXDI && !USE_RESTIRFG
+    #if !USE_RESTIRFG
             float3 fgRadiance = gOutColor[pixel].xyz;
             color += fgRadiance * thp;
-            diffuse += fgRadiance * thp;  //TODO do this properly
     #endif
-        
+
+        if (is_valid(gReSTIRColor) && kUseDirectLight)
+            color += gReSTIRColor[pixel].xyz; //This is direct hit only; could lead to artifacts
+        emission += sd.emissive; //Emission
+        color += emission; //Do this or demodulate it?
     }
     else
     {

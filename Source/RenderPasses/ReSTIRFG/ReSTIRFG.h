@@ -167,7 +167,7 @@ private:
     bool mUseReSTIRFG = true;
     RenderMode mRenderMode = RenderMode::ReSTIRFG;
     ResamplingMode mResamplingMode = ResamplingMode::SpartioTemporal;
-    DirectLightingMode mDirectLightMode = DirectLightingMode::None;
+    DirectLightingMode mDirectLightMode = DirectLightingMode::RTXDI;
 
     //Specular Trace Options
     uint mTraceMaxBounces = 10;                                          //Number of Specular/Transmissive bounces allowed
