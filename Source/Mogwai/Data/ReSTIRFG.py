@@ -13,7 +13,7 @@ def render_graph_ReSTIR_FG():
     g.addPass(AccumulatePass, 'AccumulatePass')
     ReSTIRFG = createPass('ReSTIRFG')
     g.addPass(ReSTIRFG, 'ReSTIRFG')
-    ToneMapper = createPass('ToneMapper', {'outputSize': IOSize.Default, 'useSceneMetadata': True, 'exposureCompensation': 0.0, 'autoExposure': False, 'filmSpeed': 100.0, 'whiteBalance': False, 'whitePoint': 6500.0, 'operator': ToneMapOp.Aces, 'clamp': True, 'whiteMaxLuminance': 1.0, 'whiteScale': 11.199999809265137, 'fNumber': 1.0, 'shutter': 1.0, 'exposureMode': ExposureMode.AperturePriority, 'irayExposure': False})
+    ToneMapper = createPass("ToneMapper", {'autoExposure': False, 'exposureCompensation': 0.0, 'operator': ToneMapOp.Linear})
     g.addPass(ToneMapper, 'ToneMapper')
     ScreenSpaceReSTIRPass = createPass("ScreenSpaceReSTIRPass")    
     g.addPass(ScreenSpaceReSTIRPass, "ScreenSpaceReSTIRPass")
