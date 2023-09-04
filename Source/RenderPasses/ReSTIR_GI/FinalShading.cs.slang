@@ -1,0 +1,212 @@
+#include "Scene/Material/MaterialDefines.slangh"
+#include "Utils/Math/MathConstants.slangh"
+
+import Utils.Math.PackedFormats;
+import Utils.Math.FormatConversion;
+
+import Scene.RaytracingInline;
+import Scene.Raytracing;
+import Utils.Sampling.SampleGenerator;
+import Scene.HitInfo;
+import Utils.Math.MathHelpers;
+import Utils.Sampling.SampleGenerator;
+import Rendering.Materials.StandardMaterial;
+import Rendering.Materials.MaterialShading;
+import Rendering.Materials.Microfacet;
+import Rendering.Materials.Fresnel;
+import Utils.Color.ColorHelpers;
+import Reservoir;
+import PathData;
+
+#define is_valid(name) (is_valid_##name != 0)
+
+//For Syntax highlighting
+#ifndef USE_RTXDI
+    #define USE_RTXDI 1
+#endif
+#ifndef USE_RESTIRFG
+    #define USE_RESTIRFG 1
+#endif
+
+#if USE_REDUCED_RESERVOIR_FORMAT
+    Texture2D<uint2> gReservoir;
+#else
+    Texture2D<uint4> gReservoir;
+#endif
+
+
+StructuredBuffer<GIData> gGISampleData;
+
+Texture2D<PackedHitInfo> gVBuffer;
+Texture2D<float2> gMVec;
+Texture2D<float4> gView;
+Texture2D<float4> gThp;
+Texture2D<float4> gReSTIRColor;
+RWTexture2D<float4> gOutColor;
+RWTexture2D<float4> gOutEmission;
+
+
+cbuffer PerFrame
+{
+    uint gFrameCount;                   //Current it for sample gen
+    float gAttenuationRadius;           //Current global photon radius
+    uint2 gFrameDim; //Frame Dimensions for camera dir
+}
+
+static const float kRayEpsilon = 0.99f;
+static const bool kUseEnvBackground = USE_ENV_BACKROUND;
+static const bool kUseDirectLight = USE_DIRECT_LIGHT;
+
+uint index2Dto1D(uint2 idx, uint width){
+    return idx.x + width * idx.y;
+}
+
+//Load in shading data from hit and direction
+ShadingData loadShadingData(const HitInfo hit, const float3 rayDir)
+{
+    const TriangleHit triangleHit = hit.getTriangleHit();
+    VertexData v = gScene.getVertexData(triangleHit);
+    uint materialID = gScene.getMaterialID(triangleHit.instanceID);
+    ShadingData sd = prepareShadingData(v, materialID, gScene.materials[materialID], gScene.materialResources[materialID], -rayDir, 0.f);
+    
+    return sd;
+}
+
+void getEmissiveLight(uint idx,in float3 worldPos, out float distance ,out float3 toLight, out float3 Li){
+    //Get light position
+    GIData giData = gGISampleData[idx];
+    
+    toLight = giData.posW - worldPos;
+    distance = length(toLight);
+    toLight = toLight/ distance;    //normalize
+
+    Li = giData.flux;
+    float distAttenuation = vplAttenuation(distance, gAttenuationRadius);
+    float cosTheta = saturate(dot(normalize(giData.normal), -toLight));
+    Li *= (cosTheta * distAttenuation)/giData.jacobianDeterminant;
+}
+
+[numthreads(16, 16, 1)]
+void main(uint2 pixel : SV_DispatchThreadID)
+{
+    bool valid = true;
+    
+    //Outputs
+    float3 color = { };
+    float3 emission = { };
+    float hitT = 1.f;
+    uint hitTSamples = 0;
+    
+    SampleGenerator sg = SampleGenerator(pixel, gFrameCount + 8 * 13); //TODO add seed offset
+
+    //Get shading data
+    //Get view buffer
+    float3 viewDir = -gView[pixel].xyz;
+    PackedHitInfo packedHitInfo = gVBuffer[pixel];
+    HitInfo hitInfo = HitInfo(packedHitInfo);
+    if (hitInfo.isValid())
+    {
+        float3 thp = gThp[pixel].xyz;        
+    
+        //Get Material properties
+        ShadingData sd = loadShadingData(hitInfo, viewDir);   
+
+        // Variables for RTXDI and ReSTIRFG
+        float3 diffuse = { };
+        float3 specular = { };
+        float distance = 1.f;
+        float3 dir = { };
+        float3 Li = { };
+/*
+    #if USE_RTXDI
+        //Get Final Sample from RTXDI
+        bool rtxdiValid = gRTXDI.getFinalSample(pixel, dir, distance, Li);
+        // Check light visibility.
+        if (rtxdiValid)
+        {
+        // Create a DXR 1.1 query object to trace a ray (the <1> means use alpha testing)
+            SceneRayQuery < 1 > rayQuery;
+            const Ray ray = Ray(sd.computeNewRayOrigin(), dir, 0.f, distance * kRayEpsilon);
+            if (!rayQuery.traceVisibilityRay(ray, RAY_FLAG_NONE, 0xff))
+                rtxdiValid = false;
+        }
+
+        if (rtxdiValid)
+        {
+            sd.mtl.setActiveLobes((uint) LobeType::DiffuseReflection);
+            diffuse += bsdf.eval(sd, dir, sg) * Li;
+
+            sd.mtl.setActiveLobes((uint) LobeType::SpecularReflection);
+            specular += bsdf.eval(sd, dir, sg) * Li;
+
+            hitTSamples++;
+            hitT = distance;
+        }
+    
+    #endif
+*/
+    #if USE_RESTIRFG
+        //Get reservoir
+        bool validIndirectReservoir = true;
+        Reservoir r = Reservoir(gReservoir[pixel]);
+    
+    
+        if (r.weightSum < 0 || r.M == 0)
+        {
+            validIndirectReservoir = false;
+        }
+    
+        getEmissiveLight(index2Dto1D(pixel, gFrameDim.x), sd.posW, distance, dir, Li);
+        Li = max(0.f, Li * r.weightSum);
+
+        //Check light visibility with a shadow ray
+        if (validIndirectReservoir)
+        {
+        // Ray Query for shadow test; <1> means enabled alpha testing; TODO: Add static const for alpha test
+            SceneRayQuery < 1 > rayQuery;
+            const RayDesc ray = { sd.computeNewRayOrigin(), 0.0f, dir, distance * kRayEpsilon };
+            if (!rayQuery.traceVisibilityRay(ray, RAY_FLAG_NONE, 0xff))
+                validIndirectReservoir = false;
+        }
+    
+    
+        if (validIndirectReservoir)
+        {
+            diffuse += evalBSDFCosine(sd, dir) * Li;
+            
+            hitTSamples++;
+            hitT += distance;
+            hitT *= 1.f / hitTSamples;
+        }
+        color += diffuse * thp; //Add diffuse and specular parts together
+    #endif
+   
+        //If only RTXDI is used, add the previous calculated light color
+    #if !USE_RESTIRFG
+            float3 fgRadiance = gOutColor[pixel].xyz;
+            color += fgRadiance * thp;
+            diffuse += fgRadiance * thp;  //TODO do this properly
+    #endif
+
+        if (is_valid(gReSTIRColor) && kUseDirectLight)
+            color += gReSTIRColor[pixel].xyz; //This is direct hit only; could lead to artifacts
+        emission += sd.emissive; //Emission
+        color += emission; //Do this or demodulate it?
+    }
+    else
+    {
+        if (kUseEnvBackground)
+        {
+            bool invalid = viewDir.x == 0 && viewDir.y == 0 && viewDir.z == 0;
+            if (!invalid)
+            {
+                emission = gScene.envMap.eval(viewDir);
+                color = emission;
+            }
+        }
+    }
+    
+    
+    if (is_valid(gOutColor)) gOutColor[pixel] = float4(color, 1.f);
+    if (is_valid(gOutEmission)) gOutEmission[pixel] = float4(emission, 1.f);
+}

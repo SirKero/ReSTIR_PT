@@ -51,7 +51,7 @@ namespace
     //const std::string kInputRayDistance = "rayDist";
 
     const Falcor::ChannelList kInputChannels{
-        {kInputVBuffer, "gVBuffer", "Visibility buffer in packed format" , false, ResourceFormat::Unknown },
+        { kInputVBuffer, "gVBuffer", "Visibility buffer in packed format" , false, ResourceFormat::Unknown },
         { kInputMotionVectors, "gMotionVectors", "Motion vector buffer (float format)", true /* optional */, ResourceFormat::RG32Float },
         { kInputReSTIRColor, "gReSTIRColor", "Final ReSTIR Color", true /*optional*/, ResourceFormat::Unknown},
     };
@@ -132,18 +132,6 @@ void ReSTIRFG::execute(RenderContext* pRenderContext, const RenderData& renderDa
 
     const auto& pMotionVectors = renderData[kInputMotionVectors]->asTexture();
 
-    //Init RTXDI if it is enabled
-    /*
-    if (mDirectLightMode == DirectLightingMode::RTXDI && !mpRTXDI)
-    {
-        mpRTXDI = std::make_unique<RTXDI>(mpScene, mRTXDIOptions);
-    }
-    
-    //Delete RTXDI if it is set and the mode changed
-    if (mDirectLightMode != DirectLightingMode::RTXDI && mpRTXDI)
-        mpRTXDI = nullptr;
-    */
-
     //Prepare used Datas and Buffers
     prepareLighting(pRenderContext);
 
@@ -159,8 +147,6 @@ void ReSTIRFG::execute(RenderContext* pRenderContext, const RenderData& renderDa
         mClearReservoir = false;
     }
 
-    //if (mpRTXDI) mpRTXDI->beginFrame(pRenderContext, mScreenRes);
-
     //RenderPasses
     handlePhotonCounter(pRenderContext);
 
@@ -169,9 +155,6 @@ void ReSTIRFG::execute(RenderContext* pRenderContext, const RenderData& renderDa
     getFinalGatherHitPass(pRenderContext, renderData);
 
     generatePhotonsPass(pRenderContext, renderData);
-
-    //Direct light resampling
-    //if (mpRTXDI) mpRTXDI->update(pRenderContext, pMotionVectors, mpViewDir, mpViewDirPrev);
 
     collectPhotons(pRenderContext, renderData);
 
@@ -186,10 +169,7 @@ void ReSTIRFG::execute(RenderContext* pRenderContext, const RenderData& renderDa
 
         copyViewTexture(pRenderContext, renderData);
     }
-
-
-    //if (mpRTXDI) mpRTXDI->endFrame(pRenderContext);
-    
+        
     mReservoirValid = true;
     mFrameCount++;
 }
@@ -357,7 +337,6 @@ void ReSTIRFG::setScene(RenderContext* pRenderContext, const Scene::SharedPtr& p
     mpFinalShadingPass.reset();
     mpResamplingPass.reset();
     mpEmissiveLightSampler.reset();
-    //mpRTXDI.reset();
     mClearReservoir = true;
 
     if (mpScene)
@@ -623,10 +602,7 @@ void ReSTIRFG::getFinalGatherHitPass(RenderContext* pRenderContext, const Render
     mFinalGatherSamplePass.pProgram->addDefine("USE_PHOTON_CULLING", mUsePhotonCulling ? "1" : "0");
     mFinalGatherSamplePass.pProgram->addDefine("USE_REDUCED_RESERVOIR_FORMAT", mUseReducedReservoirFormat ? "1" : "0");
     mFinalGatherSamplePass.pProgram->addDefine("CULLING_ALT_VERSION", mUseAlternativeCulling ? "1" : "0");
-    //mFinalGatherSamplePass.pProgram->addDefine("USE_RTXDI", mpRTXDI ? "1" : "0");
-    mFinalGatherSamplePass.pProgram->addDefine("USE_RTXDI", "0");
 
-    //if (mpRTXDI) mFinalGatherSamplePass.pProgram->addDefines(mpRTXDI->getDefines());
 
     if (!mFinalGatherSamplePass.pVars)
         mFinalGatherSamplePass.initProgramVars(mpScene, mpSampleGenerator);
@@ -649,7 +625,6 @@ void ReSTIRFG::getFinalGatherHitPass(RenderContext* pRenderContext, const Render
     var[nameBuf]["gUseAlphaTest"] = mPhotonUseAlphaTest;
     var[nameBuf]["gDeltaRejection"] = mGenerationDeltaRejection;
 
-    //if (mpRTXDI) mpRTXDI->setShaderData(var);
     var["gVBuffer"] = mpVBuffer;
     var["gView"] = mpViewDir;
     var["gLinZ"] = mpRayDist;
@@ -958,8 +933,6 @@ void ReSTIRFG::finalShadingPass(RenderContext* pRenderContext, const RenderData&
         defines.add("USE_REDUCED_RESERVOIR_FORMAT", mUseReducedReservoirFormat ? "1" : "0");
         defines.add("USE_ENV_BACKROUND", mpScene->useEnvBackground() ? "1" : "0");
         defines.add("_USE_LEGACY_SHADING_CODE", "0");
-        //if (mpRTXDI) defines.add(mpRTXDI->getDefines());
-        //defines.add("USE_RTXDI", mpRTXDI ? "1" : "0");
         defines.add("USE_DIRECT_LIGHT", mDirectLightMode == DirectLightingMode::RTXDI ? "1" : "0");
         defines.add("USE_RESTIRFG", mRenderMode == RenderMode::ReSTIRFG ? "1" : "0");
 
@@ -967,7 +940,6 @@ void ReSTIRFG::finalShadingPass(RenderContext* pRenderContext, const RenderData&
     }
     assert(mpFinalShadingPass);
 
-    //if (mpRTXDI) mpFinalShadingPass->getProgram()->addDefines(mpRTXDI->getDefines());  //TODO only set once?
     mpFinalShadingPass->getProgram()->addDefine("USE_DIRECT_LIGHT", mDirectLightMode == DirectLightingMode::RTXDI ? "1" : "0");
     mpFinalShadingPass->getProgram()->addDefine("USE_RESTIRFG", mRenderMode == RenderMode::ReSTIRFG ? "1" : "0");
     mpFinalShadingPass->getProgram()->addDefine("USE_REDUCED_RESERVOIR_FORMAT", mUseReducedReservoirFormat ? "1" : "0");
@@ -981,8 +953,6 @@ void ReSTIRFG::finalShadingPass(RenderContext* pRenderContext, const RenderData&
 
     mpScene->setRaytracingShaderData(pRenderContext, var, 1); // Set scene data
     mpSampleGenerator->setShaderData(var);                    // Sample generator
-
-    //if (mpRTXDI) mpRTXDI->setShaderData(var);
 
     uint reservoirIndex = mResamplingMode == ResamplingMode::Spartial ? (mFrameCount + 1) % 2 : mFrameCount % 2;
 

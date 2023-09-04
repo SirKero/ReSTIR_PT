@@ -1,0 +1,37 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="ReSTIR_GI.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="ReSTIR_GI.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Shader">
+      <UniqueIdentifier>{8a724930-3c3b-4cac-8628-8d8cb749fc1f}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ShaderSource Include="FinalShading.cs.slang">
+      <Filter>Shader</Filter>
+    </ShaderSource>
+    <ShaderSource Include="GeneratePathSamples.rt.slang">
+      <Filter>Shader</Filter>
+    </ShaderSource>
+    <ShaderSource Include="PathData.slang">
+      <Filter>Shader</Filter>
+    </ShaderSource>
+    <ShaderSource Include="ResamplingPass.cs.slang">
+      <Filter>Shader</Filter>
+    </ShaderSource>
+    <ShaderSource Include="Reservoir.slang">
+      <Filter>Shader</Filter>
+    </ShaderSource>
+    <ShaderSource Include="SurfaceDataGI.slang">
+      <Filter>Shader</Filter>
+    </ShaderSource>
+    <ShaderSource Include="TraceTransmissionDelta.rt.slang">
+      <Filter>Shader</Filter>
+    </ShaderSource>
+  </ItemGroup>
+</Project>

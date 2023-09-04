@@ -296,11 +296,6 @@ void rayGen()
 
         BSDFSample_ bsdfSample;
         bool validSample = sampleBSDF(sd, traceData.sg, bsdfSample);
-
-        //Fill the RTXDI surface if it is enabled
-    #if USE_RTXDI
-        gRTXDI.setSurfaceData(launchIndex, sd.computeNewRayOrigin(), bsdfProperties.guideNormal, bsdfProperties.diffuseReflectionAlbedo, bsdfProperties.specularReflectance, bsdfProperties.roughness, viewDepth);
-    #endif
         
         //Fill Surface Buffer used for calculating the target PDF
         surface = SurfaceFG::create(sd.computeNewRayOrigin(), sd.N, sd.V, viewDepth, sd.linearRoughness,
@@ -340,12 +335,6 @@ void rayGen()
             reservoir.weightSum = 0.f; //invalidate reseroir
         }
     }
-#if USE_RTXDI
-    else
-    {
-        gRTXDI.setInvalidSurfaceData(launchIndex);
-    }
-#endif //USE_RTXDI
     
     //Store data in buffers
     //gLightFactor[launchIndex] = lightFactor;
