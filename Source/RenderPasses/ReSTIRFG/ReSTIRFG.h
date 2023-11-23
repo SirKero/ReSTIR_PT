@@ -176,6 +176,7 @@ private:
     RenderMode mRenderMode = RenderMode::ReSTIRFG;
     ResamplingMode mResamplingMode = ResamplingMode::SpartioTemporal;
     DirectLightingMode mDirectLightMode = DirectLightingMode::RTXDI;
+    bool mOptionsChanged = false;
 
     //Specular Trace Options
     uint mTraceMaxBounces = 10;                                          //Number of Specular/Transmissive bounces allowed
@@ -215,10 +216,10 @@ private:
     bool mGenerationDeltaRejection = true;
     bool mGenerationDeltaRejectionRequireDiffPart = false;
     CausticCollectionMode mCausticCollectMode = CausticCollectionMode::All;
-    uint mCausticTemporalFilterHistoryLimit = 120;
+    uint mCausticTemporalFilterHistoryLimit = 60;
 
     bool mUsePhotonCulling = true;
-    bool mUseCausticCulling = true;                                 //Enable Culling for caustics
+    bool mUseCausticCulling = false;                                 //Enable Culling for caustics
     uint mCullingHashBufferSizeBits = 20;                           //Number of Culling Hash bits
     bool mCullingUseFixedRadius = true;
     float mCullingCellRadius = 0.1f;                                //Radius used for the culling cells
@@ -229,6 +230,9 @@ private:
     float mPhotonDynamicGuardPercentage = 0.08f;  // Determines how much space of the buffer is used to guard against buffer overflows
     float mPhotonDynamicChangePercentage = 0.05f; // The percentage the buffer is increased/decreased per frame
 
+    bool mUseSPPM = false;
+    float2 mSPPMAlpha = float2(2.f / 3.f);
+    uint mSPPMFramesCameraStill = 0;
     //
     // Buffer and Textures
     //
