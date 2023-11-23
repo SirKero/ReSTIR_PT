@@ -50,7 +50,8 @@ EmissiveLightSampler gEmissiveSampler; ///< Emissive light sampler. Only valid w
 
 static const bool kNEE = GI_USE_NEE; 
 static const bool kUseAnalyticLights = GI_USE_ANALYTIC; 
-static const bool kUseEmissiveLights = GI_USE_EMISSIVE; 
+static const bool kUseEmissiveLights = GI_USE_EMISSIVE;
+static const bool kMixedLights = GI_USE_ANALYTIC && GI_USE_EMISSIVE;
 static const bool kUseAlphaTest = GI_ALPHA_TEST;
 static const bool kUseMIS = GI_MIS;
 static const bool kRussianRoulette = GI_RUSSIAN_ROULETTE;
@@ -134,6 +135,7 @@ bool generateEmissiveSample(const in ShadingData sd, const bool upperHemisphere,
     float3 toLight = lightPos - ls.origin;
     ls.distance = length(toLight);
     ls.dir = normalize(toLight);
+    ls.lightType = 1;
 
     return any(ls.Li > 0.f);
 }
@@ -171,42 +173,39 @@ bool generateAnalyticLightSample(const in ShadingData sd, inout SampleGenerator 
     // Do not worry about adjusting the ray length to avoid self-intersections at the light.
     ls.distance = lightSample.distance;
     ls.dir = lightSample.dir;
+    ls.lightType = 0;
 
     return any(ls.Li > 0.f);
 }
 
-bool selectLightType(out uint lightType, out float pdf, inout SampleGenerator sg)
+void selectLightType(out uint lightType, out float pdf, inout SampleGenerator sg)
 {
     pdf = 0.5f;
 
     float u = sampleNext1D(sg);
 
     if (u < pdf)
-    {
         lightType = 0;  //analytic
-    }
     else
         lightType = 1; //emissive
-
-    return true;
 }
 
 bool generateLightSample(const in ShadingData sd, inout SampleGenerator sg, out LightSample ls)
 {
     ls = { };
-
-    uint lightType;
-    float selectionPdf;
-    if (!selectLightType(lightType, selectionPdf, sg))
-        return false;
+    
+    uint lightType = 2; //Set to invalid type
+    float selectionPdf = 1.f;
+    if(kMixedLights)
+        selectLightType(lightType, selectionPdf, sg);
 
     bool valid = false;
-    if (kUseEmissiveLights && lightType == 1 /*emissive*/)
+    if (kUseEmissiveLights && (!kMixedLights || lightType == 1) )
     {
         // Emissive light samplers have an option to exclusively sample the upper hemisphere.
         valid = generateEmissiveSample(sd, true, sg, ls);
     }
-    if (kUseAnalyticLights && lightType == 0)
+    if (kUseAnalyticLights && (!kMixedLights || lightType == 0))
     {
         valid = generateAnalyticLightSample(sd, sg, ls);
     }
@@ -365,15 +364,15 @@ void rayGen()
             if (i == 0)
             {
                 //If an emissive light source is hit, return as this case is already covered by ReSTIR
-                //if (any(miProperties.emission > 0.f))
-                //    break;
+                if (any(sd.emissive > 0.f))
+                    break;
                 //Fill GIData for the first hit (the resample point). Radiance is filled in at a later point
                 giData.posW = sd.computeNewRayOrigin();
                 giData.normal = sd.N;
                 float dist = distance(tRay.Origin, sd.posW);
                 giData.jacobianDeterminant = vplAttenuation(dist, gAttenuationRadius) * saturate(dot(sd.N, sd.V));
             }
-            else
+            else if(!kNEE)  //Only use direct emissive hits for the non NEE case
             {
                 radiance += thp * sd.emissive;
             }
@@ -398,7 +397,7 @@ void rayGen()
                         shadowData.visible = false;
                         RayDesc shadowRay = ls.getVisibilityRay();
                             
-                        TraceRay(gScene.rtAccel, RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH, 0xff /* instanceInclusionMask */, 1 /* hitIdx */, rayTypeCount, 1 /* missIdx */, tRay, traceData);
+                        TraceRay(gScene.rtAccel, RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH, 0xff /* instanceInclusionMask */, 1 /* hitIdx */, rayTypeCount, 1 /* missIdx */, shadowRay, shadowData);
 
                         if(shadowData.visible)
                                 radiance += Lr * thp;
