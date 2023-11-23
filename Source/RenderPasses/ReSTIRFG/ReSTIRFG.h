@@ -88,6 +88,14 @@ public:
         RTXDI = 1u
     };
 
+    enum class CausticCollectionMode : uint
+    {
+        All = 0u,
+        None = 1u,
+        GreaterOne = 2u,
+        Temporal = 3u
+    };
+
 private:
     ReSTIRFG();
 
@@ -204,15 +212,16 @@ private:
     bool mChangePhotonLightBufferSize = false;
     bool mPhotonUseAlphaTest = true;
     bool mPhotonAdjustShadingNormal = true;
-    bool mEnableCausticPhotonCollection = true;
     bool mGenerationDeltaRejection = true;
     bool mGenerationDeltaRejectionRequireDiffPart = false;
+    CausticCollectionMode mCausticCollectMode = CausticCollectionMode::All;
+    uint mCausticTemporalFilterHistoryLimit = 120;
 
     bool mUsePhotonCulling = true;
+    bool mUseCausticCulling = true;                                 //Enable Culling for caustics
     uint mCullingHashBufferSizeBits = 20;                           //Number of Culling Hash bits
     bool mCullingUseFixedRadius = true;
     float mCullingCellRadius = 0.1f;                                //Radius used for the culling cells
-    bool mUseAlternativeCulling = false;
 
     const uint kDynamicPhotonDispatchInitValue = 500224; // Start with 500 thousand photons
     bool mUseDynamicePhotonDispatchCount = true;  // Dynamically change the number of photons to fit the max photon number
@@ -232,7 +241,7 @@ private:
     Buffer::SharedPtr mpPhotonCounter;        // Counter for the number of lights
     Buffer::SharedPtr mpPhotonCounterCPU;     // For showing the current number of photons in the UI
     Texture::SharedPtr mpPhotonCullingMask; // Mask for photon culling
-    Texture::SharedPtr mpCausticRadiance;     // Caustic Radiance from the Collection pass
+    Texture::SharedPtr mpCausticRadiance[2];     // Caustic Radiance from the Collection pass
     Texture::SharedPtr mpVBuffer;             //Work copy for VBuffer
     Texture::SharedPtr mpViewDir;             //View dir tex (needed for highly specular and transparent materials)
     Texture::SharedPtr mpViewDirPrev;         //Previous View dir
