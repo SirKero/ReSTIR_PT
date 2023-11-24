@@ -9,7 +9,6 @@ import Scene.Raytracing;
 import Utils.Sampling.SampleGenerator;
 import Scene.HitInfo;
 import Utils.Math.MathHelpers;
-import Utils.Sampling.SampleGenerator;
 import Rendering.Materials.StandardMaterial;
 import Rendering.Materials.MaterialShading;
 import Rendering.Materials.Microfacet;
@@ -42,7 +41,6 @@ Texture2D<float2> gMVec;
 Texture2D<float4> gView;
 Texture2D<float4> gCausticRadiance;
 Texture2D<float4> gThp;
-Texture2D<float4> gReSTIRColor;
 RWTexture2D<float4> gOutColor;
 RWTexture2D<float4> gOutEmission;
 
@@ -196,10 +194,9 @@ void main(uint2 pixel : SV_DispatchThreadID)
             color += fgRadiance * thp;
     #endif
 
-        if (is_valid(gReSTIRColor) && kUseDirectLight)
-            color += gReSTIRColor[pixel].xyz; //This is direct hit only; could lead to artifacts
-        emission += sd.emissive; //Emission
-        color += emission; //Do this or demodulate it?
+        //Emission is added in ReSTIR pass
+        //emission += sd.emissive; //Emission
+        //color += emission; //Do this or demodulate it?
     }
     else
     {

@@ -16,6 +16,10 @@ import Lights;
 import Resampling;
 import Params;
 
+#ifndef VIEW_VALID
+#define VIEW_VALID 0
+#endif
+
 /** Performs temporal resampling by combining the reservoir from the initial
     resampling pass with a reservoir from the last frame obtained through
     reprojection.
@@ -35,6 +39,8 @@ struct TemporalResampling
     Texture2D<float2> motionVectors;
     RWStructuredBuffer<PackedReservoir> reservoirs;
     StructuredBuffer<PackedReservoir> prevReservoirs;
+    Texture2D<float4> viewTexture;
+    Texture2D<float4> prevViewTexture;
     RWTexture2D<float4> debugOutput;
 
     Lights lights;
@@ -67,11 +73,19 @@ struct TemporalResampling
         const uint prevPixelIndex = getPixelIndex(prevPixel);
 
         // Setup evaluation context for current pixel.
+        #if VIEW_VALID
+        const EvalContext currentContext = EvalContext::create(pixel, viewTexture[pixel].xyz, SurfaceData::createFromPacked(surfaceData[pixelIndex]));
+        #else
         const EvalContext currentContext = EvalContext::create(pixel, frameDim, SurfaceData::createFromPacked(surfaceData[pixelIndex]));
+        #endif //VIEW_VALID
         if (!currentContext.isValid()) return;
 
         // Setup evaluation context for back-projected pixel.
+        #if VIEW_VALID
+        const EvalContext prevContext = EvalContext::create(prevPixel, prevViewTexture[prevPixel].xyz, SurfaceData::createFromPacked(prevSurfaceData[prevPixelIndex]));
+        #else
         const EvalContext prevContext = EvalContext::create(prevPixel, frameDim, SurfaceData::createFromPacked(prevSurfaceData[prevPixelIndex]));
+        #endif //VIEW_VALID
         if (!prevContext.isValid()) return;
 
         // Write debug output.

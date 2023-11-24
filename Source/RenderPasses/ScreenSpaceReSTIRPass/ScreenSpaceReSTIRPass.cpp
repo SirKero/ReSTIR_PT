@@ -19,11 +19,18 @@ namespace
 
     const std::string kInputVBuffer = "vbuffer";
     const std::string kInputMotionVectors = "motionVectors";
+    const std::string kInputView = "view";
+    const std::string kInputPrevView = "prevView";
+    const std::string kInputThp = "throughput";
 
     const Falcor::ChannelList kInputChannels =
     {
         { kInputVBuffer, "gVBuffer", "Visibility buffer in packed format", false, ResourceFormat::Unknown },
         { kInputMotionVectors, "gMotionVectors", "Motion vector buffer (float format)", true /* optional */, ResourceFormat::RG32Float },
+        { kInputView, "gViewVector", "View Vector", true /* optional */, ResourceFormat::RGBA32Float },
+        { kInputPrevView, "gPrevView", "View Vector from previous frame", true /* optional */, ResourceFormat::RGBA32Float },
+        { kInputThp, "gThp", "Throughput for each color channel", true /* optional */, ResourceFormat::RGBA16Float },
+
     };
 
     const Falcor::ChannelList kOutputChannels =
@@ -148,6 +155,9 @@ void ScreenSpaceReSTIRPass::execute(RenderContext* pRenderContext, const RenderD
 
     const auto& pVBuffer = renderData[kInputVBuffer]->asTexture();
     const auto& pMotionVectors = renderData[kInputMotionVectors]->asTexture();
+    const auto& pView = renderData[kInputView]->asTexture();
+    const auto& pPrevView = renderData[kInputPrevView]->asTexture();
+    const auto& pThp = renderData[kInputThp]->asTexture();
 
     // Clear outputs if ReSTIR module is not initialized.
     if (mpScreenSpaceReSTIR.empty())
@@ -187,7 +197,7 @@ void ScreenSpaceReSTIRPass::execute(RenderContext* pRenderContext, const RenderD
 
         prepareSurfaceData(pRenderContext, pVBuffer, i);
 
-        mpScreenSpaceReSTIR[i]->updateReSTIRDI(pRenderContext, pMotionVectors);
+        mpScreenSpaceReSTIR[i]->updateReSTIRDI(pRenderContext, pMotionVectors, pView, pPrevView);
 
         finalShading(pRenderContext, pVBuffer, renderData, i);
 
@@ -264,12 +274,17 @@ void ScreenSpaceReSTIRPass::finalShading(RenderContext* pRenderContext, const Te
 {
     assert(!mpScreenSpaceReSTIR.empty() && mpScreenSpaceReSTIR[instanceID]);
 
+    const auto& pView = renderData[kInputView]->asTexture();
+    const auto& pThp = renderData[kInputThp]->asTexture();
+
     PROFILE("finalShading");
 
     if (!mpFinalShading)
     {
         auto defines = mpScene->getSceneDefines();
         defines.add("GBUFFER_ADJUST_SHADING_NORMALS", mGBufferAdjustShadingNormals ? "1" : "0");
+        defines.add("THP_VALID", pThp ? "1" : "0");
+        defines.add("VIEW_VALID", pView ? "1" : "0");
         //defines.add("USE_ENV_BACKGROUND", mpScene->useEnvBackground() ? "1" : "0");
         defines.add(getValidResourceDefines(kOutputChannels, renderData));
         mpFinalShading = ComputePass::create(kFinalShadingFile, "main", defines, false);
@@ -288,7 +303,10 @@ void ScreenSpaceReSTIRPass::finalShading(RenderContext* pRenderContext, const Te
 
     auto var = mpFinalShading["CB"]["gFinalShading"];
 
-    var["vbuffer"] = pVBuffer;
+    var["gViewTexture"] = pView;
+    var["gThpTexture"] = pThp;
+    var["gVBuffer"] = pVBuffer;
+    
     var["frameDim"] = mFrameDim;
     var["numReSTIRInstances"] = mNumReSTIRInstances;
     var["ReSTIRInstanceID"] = instanceID;

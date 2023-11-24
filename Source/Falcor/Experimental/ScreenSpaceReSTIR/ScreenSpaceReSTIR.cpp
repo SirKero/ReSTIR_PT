@@ -339,7 +339,7 @@ namespace Falcor
         }
     }
 
-    void ScreenSpaceReSTIR::updateReSTIRDI(RenderContext* pRenderContext, const Texture::SharedPtr& pMotionVectors)
+    void ScreenSpaceReSTIR::updateReSTIRDI(RenderContext* pRenderContext, const Texture::SharedPtr& pMotionVectors, const Texture::SharedPtr& pView, const Texture::SharedPtr& pPrevView)
     {
         PROFILE("ScreenSpaceReSTIR::updateReSTIRDI");
 
@@ -358,9 +358,9 @@ namespace Falcor
             if (!mOptions->useReSTIRDI) return;
             updateEmissiveTriangles(pRenderContext);
             generateLightTiles(pRenderContext);
-            initialResampling(pRenderContext);
-            temporalResampling(pRenderContext, pMotionVectors);
-            spatialResampling(pRenderContext);
+            initialResampling(pRenderContext,pView);
+            temporalResampling(pRenderContext, pMotionVectors, pView, pPrevView);
+            spatialResampling(pRenderContext, pView);
             evaluateFinalSamples(pRenderContext);
         }
         else
@@ -808,13 +808,15 @@ namespace Falcor
         mpGenerateLightTiles->execute(pRenderContext, uint3(mOptions->lightTileSize, mOptions->lightTileCount, 1));
     }
 
-    void ScreenSpaceReSTIR::initialResampling(RenderContext* pRenderContext)
+    void ScreenSpaceReSTIR::initialResampling(RenderContext* pRenderContext, const Texture::SharedPtr& pViewTex)
     {
         PROFILE("initialResampling");
 
         mpInitialResampling["gScene"] = mpScene->getParameterBlock();
 
         auto rootVar = mpInitialResampling->getRootVar();
+
+        mpInitialResampling->getProgram()->addDefine("VIEW_VALID", pViewTex ? "1" : "0");
 
         mpScene->setRaytracingShaderData(pRenderContext, rootVar);
         mpPixelDebug->prepareProgram(mpInitialResampling->getProgram(), rootVar);
@@ -824,6 +826,7 @@ namespace Falcor
         var["normalDepth"] = mpNormalDepthTexture;
         var["lightTileData"] = mpLightTileData;
         var["reservoirs"] = mpReservoirs;
+        var["viewTexture"] = pViewTex;
         var["debugOutput"] = mpDebugOutputTexture;
         setLightsShaderData(var["lights"]);
         var["frameDim"] = mFrameDim;
@@ -834,7 +837,7 @@ namespace Falcor
         mpInitialResampling->execute(pRenderContext, mFrameDim.x, mFrameDim.y, 1);
     }
 
-    void ScreenSpaceReSTIR::temporalResampling(RenderContext* pRenderContext, const Texture::SharedPtr& pMotionVectors)
+    void ScreenSpaceReSTIR::temporalResampling(RenderContext* pRenderContext, const Texture::SharedPtr& pMotionVectors, const Texture::SharedPtr& pViewTex, const Texture::SharedPtr& pPrevViewTex )
     {
         PROFILE("temporalResampling");
 
@@ -850,6 +853,8 @@ namespace Falcor
 
         auto rootVar = mpTemporalResampling->getRootVar();
 
+        mpTemporalResampling->getProgram()->addDefine("VIEW_VALID", pViewTex && pPrevViewTex ? "1" : "0");
+
         mpScene->setRaytracingShaderData(pRenderContext, rootVar);
         mpPixelDebug->prepareProgram(mpTemporalResampling->getProgram(), rootVar);
 
@@ -859,6 +864,8 @@ namespace Falcor
         var["motionVectors"] = pMotionVectors;
         var["reservoirs"] = mpReservoirs;
         var["prevReservoirs"] = mpPrevReservoirs;
+        var["viewTexture"] = pViewTex;
+        var["prevViewTexture"] = pPrevViewTex;
         var["debugOutput"] = mpDebugOutputTexture;
         setLightsShaderData(var["lights"]);
         var["frameDim"] = mFrameDim;
@@ -870,7 +877,7 @@ namespace Falcor
         mpTemporalResampling->execute(pRenderContext, mFrameDim.x, mFrameDim.y, 1);
     }
 
-    void ScreenSpaceReSTIR::spatialResampling(RenderContext* pRenderContext)
+    void ScreenSpaceReSTIR::spatialResampling(RenderContext* pRenderContext, const Texture::SharedPtr& pViewTex)
     {
         PROFILE("spatialResampling");
 
@@ -880,12 +887,15 @@ namespace Falcor
 
         auto rootVar = mpSpatialResampling->getRootVar();
 
+        mpSpatialResampling->getProgram()->addDefine("VIEW_VALID", pViewTex ? "1" : "0");
+
         mpScene->setRaytracingShaderData(pRenderContext, rootVar);
         mpPixelDebug->prepareProgram(mpSpatialResampling->getProgram(), rootVar);
 
         auto var = rootVar["CB"]["gSpatialResampling"];
         var["surfaceData"] = mpSurfaceData;
         var["normalDepth"] = mpNormalDepthTexture;
+        var["viewTexture"] = pViewTex;
         var["debugOutput"] = mpDebugOutputTexture;
         var["neighborOffsets"] = mpNeighborOffsets;
         setLightsShaderData(var["lights"]);

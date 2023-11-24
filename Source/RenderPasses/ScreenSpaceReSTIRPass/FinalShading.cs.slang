@@ -8,9 +8,21 @@
  # license agreement from NVIDIA CORPORATION is strictly prohibited.
  **************************************************************************/
 import LoadShadingData;
+
+import Utils.Math.PackedFormats;
+import Utils.Math.FormatConversion;
+
+import Scene.RaytracingInline;
+import Scene.Raytracing;
+import Scene.HitInfo;
+import Utils.Math.MathHelpers;
 import Rendering.Materials.StandardMaterial;
+import Rendering.Materials.MaterialShading;
 import Rendering.Materials.Microfacet;
 import Experimental.ScreenSpaceReSTIR.ScreenSpaceReSTIR;
+import Utils.Color.ColorHelpers;
+
+
 
 RWTexture2D<float4> gColor;
 RWTexture2D<float4> gEmission;
@@ -28,8 +40,10 @@ struct FinalShading
 {
     // Static configuration.
     //static const bool kUseEnvBackground = USE_ENV_BACKGROUND;
-
-    Texture2D<PackedHitInfo> vbuffer;
+    Texture2D<float4> gViewTexture;
+    Texture2D<float4> gThpTexture;
+    Texture2D<PackedHitInfo> gVBuffer;
+    
 
     ScreenSpaceReSTIR screenSpaceReSTIR;
     StandardMaterial standardMaterial;
@@ -38,7 +52,18 @@ struct FinalShading
 
     uint numReSTIRInstances;
     uint ReSTIRInstanceID;
-
+    
+    //Load in shading data from hit and direction
+    ShadingData loadShadingDataView(const HitInfo hit, const float3 rayDir)
+    {
+        const TriangleHit triangleHit = hit.getTriangleHit();
+        VertexData v = gScene.getVertexData(triangleHit);
+        uint materialID = gScene.getMaterialID(triangleHit.instanceID);
+        ShadingData sd = prepareShadingData(v, materialID, gScene.materials[materialID], gScene.materialResources[materialID], -rayDir, 0.f);
+    
+        return sd;
+    }
+    
     void execute(uint2 pixel)
     {
         if (any(pixel >= frameDim)) return;
@@ -51,8 +76,22 @@ struct FinalShading
         float3 specularIllumination = {};
         float hitT = 10000.f; // TODO: Remove magic number also used in SpatioTemporalResampling pass.
 
+        bool valid = false;
         ShadingData sd;
-        if (loadShadingData(pixel, frameDim, gScene.camera, vbuffer, sd))
+        #if VIEW_VALID
+        PackedHitInfo packedHitInfo = gVBuffer[pixel];
+        HitInfo hitInfo = HitInfo(packedHitInfo);
+        float3 viewDir = -gViewTexture[pixel].xyz;
+        valid = hitInfo.isValid();
+        if(valid)
+            sd = loadShadingDataView(hitInfo, viewDir);
+        #else
+        valid = loadShadingData(pixel, frameDim, gScene.camera, gVBuffer, sd);
+        PackedHitInfo packedHitInfo = gVBuffer[pixel];
+        HitInfo hitInfo = HitInfo(packedHitInfo);
+        valid = hitInfo.isValid();
+        #endif
+        if (valid)
         {
             // Get final sample from ReSTIR.
 
@@ -78,7 +117,11 @@ struct FinalShading
             emission = sd.emissive;
 
             color += diffuse + specular + emission;
-
+            
+            #if THP_VALID
+            color *= gThpTexture[pixel].xyz;
+            #endif
+           
             // Demodulate diffuse reflectance (albedo) from diffuse color.
             diffuseReflectance += sd.diffuse;
             float3 diffuseFactor = diffuseReflectance <= 0.f ? 0.f : 1.f / diffuseReflectance;

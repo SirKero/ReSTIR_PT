@@ -146,6 +146,10 @@ private:
     */
     void copyViewTexture(RenderContext* pRenderContext, const RenderData& renderData);
 
+    /** Copy ReSTIR DI Textures
+    */ 
+    void copyReSTIRTexture(RenderContext* pRenderContext, const RenderData& renderData);
+
     /** Returs quad texture dimensions depending on the number of elements needed
     */
     void computeQuadTexSize(uint maxItems, uint& outWidth, uint& outHeight);
@@ -286,4 +290,5 @@ private:
 
     ComputePass::SharedPtr mpResamplingPass;                  // Resampling Pass for all resampling modes
     ComputePass::SharedPtr mpFinalShadingPass;                // Final Shading Pass
+    ComputePass::SharedPtr mpCopyReSTIRResourcesPass;                // CopyResources for ScreenSpaceReSTIR pass
 };

@@ -60,6 +60,27 @@ struct EvalContext
         return evalContext;
     }
 
+    static EvalContext create(uint2 pixel, float3 view, SurfaceData surfaceData)
+    {
+        EvalContext evalContext = {};
+        evalContext.pos = surfaceData.pos;
+        evalContext.depth = surfaceData.depth;
+        evalContext.N = surfaceData.normal;
+        evalContext.V = view;
+        evalContext.NdotV = saturate(dot(evalContext.N, evalContext.V));
+        evalContext.diffuseWeight = surfaceData.diffuseWeight;
+        evalContext.specularWeight = surfaceData.specularWeight;
+        float weightSum = surfaceData.diffuseWeight + surfaceData.specularWeight;
+        evalContext.diffuseSpecularMix = weightSum > 1e-7f ? (surfaceData.diffuseWeight / weightSum) : 1.f;
+        // Clamp roughness to avoid numerical instability when evaluating the GGX lobe.
+        // This is the same threshold as used in the legacy Falcor BRDF.
+        float roughness = max(ROUGHNESS_THRESHOLD, surfaceData.specularRoughness);
+        evalContext.ggxAlpha = roughness * roughness;
+        evalContext.lobes = surfaceData.lobes;
+        evalContext.valid = surfaceData.isValid();
+        return evalContext;
+    }
+
     bool isValid()
     {
         return valid;

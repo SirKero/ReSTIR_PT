@@ -18,6 +18,9 @@ import Lights;
 import Resampling;
 import Params;
 
+#ifndef VIEW_VALID
+#define VIEW_VALID 0
+#endif
 /** Performs initial resampling from light samples in the light tiles.
 */
 struct InitialResampling
@@ -41,6 +44,7 @@ struct InitialResampling
     Texture2D<uint> normalDepth;
     StructuredBuffer<PackedLoadedLightSample> lightTileData;
     RWStructuredBuffer<PackedReservoir> reservoirs;
+    Texture2D<float4> viewTexture;
     RWTexture2D<float4> debugOutput;
 
     Lights lights;
@@ -91,8 +95,12 @@ struct InitialResampling
 
         // Setup evaluation context.
         SurfaceData sd = SurfaceData::createFromPacked(surfaceData[pixelIndex]);
+        #if VIEW_VALID
+        EvalContext evalContext = EvalContext::create(pixel, viewTexture[pixel].xyz, sd);
+        #else
         EvalContext evalContext = EvalContext::create(pixel, frameDim, sd);
-
+        #endif
+        
         // Early out if pixel contains no valid data (i.e. background pixel).
         if (!evalContext.isValid())
         {

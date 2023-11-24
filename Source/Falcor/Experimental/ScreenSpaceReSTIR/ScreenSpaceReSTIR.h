@@ -221,7 +221,7 @@ namespace Falcor
             \param[in] pRenderContext Render context.
             \param[in] pMotionVectors Motion vectors for temporal reprojection.
         */
-        void updateReSTIRDI(RenderContext* pRenderContext, const Texture::SharedPtr& pMotionVectors);
+        void updateReSTIRDI(RenderContext* pRenderContext, const Texture::SharedPtr& pMotionVectors, const Texture::SharedPtr& pView = nullptr, const Texture::SharedPtr& pPrevView = nullptr);
 
         /** Update the ReSTIR sampler.
             This runs the ReSTIR GI algorithm.
@@ -269,9 +269,9 @@ namespace Falcor
 
         void updateEmissiveTriangles(RenderContext* pRenderContext);
         void generateLightTiles(RenderContext* pRenderContext);
-        void initialResampling(RenderContext* pRenderContext);
-        void temporalResampling(RenderContext* pRenderContext, const Texture::SharedPtr& pMotionVectors);
-        void spatialResampling(RenderContext* pRenderContext);
+        void initialResampling(RenderContext* pRenderContext, const Texture::SharedPtr& pView = nullptr);
+        void temporalResampling(RenderContext* pRenderContext, const Texture::SharedPtr& pMotionVectors, const Texture::SharedPtr& pView = nullptr, const Texture::SharedPtr& pPrevView = nullptr);
+        void spatialResampling(RenderContext* pRenderContext, const Texture::SharedPtr& pView = nullptr);
         void evaluateFinalSamples(RenderContext* pRenderContext);
 
         void reSTIRGIClearPass(RenderContext* pRenderContext);

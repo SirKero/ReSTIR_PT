@@ -42,5 +42,8 @@
     <ShaderSource Include="TraceTransmissionDelta.rt.slang">
       <Filter>Shader</Filter>
     </ShaderSource>
+    <ShaderSource Include="CopyReSTIRResources.cs.slang">
+      <Filter>Shader</Filter>
+    </ShaderSource>
   </ItemGroup>
 </Project>

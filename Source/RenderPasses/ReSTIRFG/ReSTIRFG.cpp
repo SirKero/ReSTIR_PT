@@ -39,6 +39,7 @@ namespace
     const std::string kCollectPhotonsShader = "RenderPasses/ReSTIRFG/CollectPhotons.rt.slang";
     const std::string kResamplingPassShader = "RenderPasses/ReSTIRFG/ResamplingPass.cs.slang";
     const std::string kFinalShadingPassShader = "RenderPasses/ReSTIRFG/FinalShading.cs.slang";
+    const std::string kCopyReSTIRResourcesShader = "RenderPasses/ReSTIRFG/CopyReSTIRResources.cs.slang";
 
     const std::string kShaderModel = "6_5";
     const uint kMaxPayloadBytes = 96u;
@@ -52,16 +53,23 @@ namespace
 
     const Falcor::ChannelList kInputChannels{
         { kInputVBuffer, "gVBuffer", "Visibility buffer in packed format" , false, ResourceFormat::Unknown },
-        { kInputMotionVectors, "gMotionVectors", "Motion vector buffer (float format)", true /* optional */, ResourceFormat::RG32Float },
-        { kInputReSTIRColor, "gReSTIRColor", "Final ReSTIR Color", true /*optional*/, ResourceFormat::Unknown},
+        { kInputMotionVectors, "gMotionVectors", "Motion vector buffer (float format)", true /* optional */, ResourceFormat::RG32Float }
     };
 
     const std::string kOutputColor = "color";
     const std::string kOutputEmission = "emission";
+    const std::string kOutputThp = "thp";
+    const std::string kOutputView = "view";
+    const std::string kOutputPrevView = "prevView";
+    const std::string kOutputVBuffer = "vbufferOut";
 
     const Falcor::ChannelList kOutputChannels{
         {kOutputColor, "gOutColor", "Output Color (linear)", true /*optional*/, ResourceFormat::RGBA32Float},
-        { kOutputEmission,               "gOutEmission",             "Output Emission", true /*optional*/, ResourceFormat::RGBA32Float }
+        { kOutputEmission,               "gOutEmission",             "Output Emission", true /*optional*/, ResourceFormat::RGBA32Float },
+        {kOutputVBuffer, "gVBufferOut", "VBuffer traced to first diffuse hit", true /*optional*/, HitInfo::kDefaultFormat },
+        {kOutputThp, "gThpOut", "Throughput for the pixel", true /*optional*/, ResourceFormat::RGBA16Float},
+        {kOutputView, "gViewOut", "View dir current pixel. Orientation: To hit", true /*optional*/, ResourceFormat::RGBA32Float },
+        {kOutputPrevView, "gPrevViewOut", "View dir last frame. Orientation: To hit", true /*optional*/, ResourceFormat::RGBA32Float },
     };
 
     const Gui::DropdownList kResamplingModeList{
@@ -182,9 +190,11 @@ void ReSTIRFG::execute(RenderContext* pRenderContext, const RenderData& renderDa
     if ((mRenderMode == RenderMode::ReSTIRFG) || mDirectLightMode == DirectLightingMode::RTXDI)
     {
         finalShadingPass(pRenderContext, renderData);
-
-        copyViewTexture(pRenderContext, renderData);
     }
+
+    copyViewTexture(pRenderContext, renderData);
+
+    copyReSTIRTexture(pRenderContext, renderData);
 
     //SPPM
     if (mUseSPPM)
@@ -1064,7 +1074,6 @@ void ReSTIRFG::finalShadingPass(RenderContext* pRenderContext, const RenderData&
     var["gReservoir"] = mpReservoirBuffer[reservoirIndex];
     var["gFGSampleData"] = mpFGSampelDataBuffer[reservoirIndex];
 
-    var["gReSTIRColor"] = renderData[kInputReSTIRColor]->asTexture();
     var["gThp"] = mpThp;
     var["gView"] = mpViewDir;
     var["gVBuffer"] = mpVBuffer;
@@ -1075,7 +1084,7 @@ void ReSTIRFG::finalShadingPass(RenderContext* pRenderContext, const RenderData&
     var["gCausticRadiance"] = mpCausticRadiance[causticRadianceIdx];
 
     //Bind all Output Channels
-    for (uint i = 0; i < kOutputChannels.size(); i++)
+    for (uint i = 0; i < 2; i++)
     {
         if (renderData[kOutputChannels[i].name])
             var[kOutputChannels[i].texname] = renderData[kOutputChannels[i].name]->asTexture();
@@ -1096,10 +1105,53 @@ void ReSTIRFG::finalShadingPass(RenderContext* pRenderContext, const RenderData&
 }
 
 void ReSTIRFG::copyViewTexture(RenderContext* pRenderContext, const RenderData& renderData) {
+    PROFILE("CopyView");
     if (mpViewDir != nullptr)
     {
         pRenderContext->copyResource(mpViewDirPrev.get(), mpViewDir.get());
     }
+}
+
+
+void ReSTIRFG::copyReSTIRTexture(RenderContext* pRenderContext, const RenderData& renderData)
+{
+    PROFILE("CopyReSTIRTextures");
+    // Create pass
+    if (!mpCopyReSTIRResourcesPass)
+    {
+        Program::Desc desc;
+        //desc.addShaderModules(mpScene->getShaderModules());
+        desc.addShaderLibrary(kCopyReSTIRResourcesShader).csEntry("main").setShaderModel(kShaderModel);
+        //desc.addTypeConformances(mpScene->getTypeConformances());
+
+        Program::DefineList defines;
+        defines.add(mpScene->getSceneDefines());
+        defines.add(getValidResourceDefines(kOutputChannels, renderData));
+
+        mpCopyReSTIRResourcesPass = ComputePass::create(desc, defines, true);
+    }
+    assert(mpCopyReSTIRResourcesPass);
+
+    mpCopyReSTIRResourcesPass->getProgram()->addDefines(getValidResourceDefines(kOutputChannels, renderData));
+
+    // Set variables
+    auto var = mpCopyReSTIRResourcesPass->getRootVar();
+
+    mpScene->setRaytracingShaderData(pRenderContext, var, 1); // Set scene data
+    
+    var["gThpOut"] = renderData[kOutputThp]->asTexture();
+    var["gViewOut"] = renderData[kOutputView]->asTexture();
+    var["gPrevViewOut"] = renderData[kOutputPrevView]->asTexture();
+    var["gVBufferOut"] = renderData[kOutputVBuffer]->asTexture();
+
+    var["gThpIn"] = mpThp;
+    var["gViewIn"] = mpViewDir;
+    var["gPrevViewIn"] = mpViewDir;
+    var["gVBufferIn"] = mpVBuffer;
+    // Execute
+    const uint2 targetDim = renderData.getDefaultTextureDims();
+    assert(targetDim.x > 0 && targetDim.y > 0);
+    mpCopyReSTIRResourcesPass->execute(pRenderContext, uint3(targetDim, 1));
 }
 
 void ReSTIRFG::computeQuadTexSize(uint maxItems, uint& outWidth, uint& outHeight) {

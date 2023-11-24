@@ -36,6 +36,7 @@ namespace
     const std::string kPathSamplesShader = "RenderPasses/ReSTIR_GI/GeneratePathSamples.rt.slang";
     const std::string kResamplingPassShader = "RenderPasses/ReSTIR_GI/ResamplingPass.cs.slang";
     const std::string kFinalShadingPassShader = "RenderPasses/ReSTIR_GI/FinalShading.cs.slang";
+    const std::string kCopyReSTIRResourcesShader = "RenderPasses/ReSTIR_GI/CopyReSTIRResources.cs.slang";
 
     const std::string kShaderModel = "6_5";
     const uint kMaxPayloadBytes = 96u;
@@ -43,25 +44,26 @@ namespace
     // Render Pass inputs and outputs
     const std::string kInputVBuffer = "vbuffer";
     const std::string kInputMotionVectors = "mvec";
-    const std::string kInputReSTIRColor = "colorReSTIR";
 
     const Falcor::ChannelList kInputChannels{
         { kInputVBuffer, "gVBuffer", "Visibility buffer in packed format", false, ResourceFormat::Unknown },
         { kInputMotionVectors, "gMotionVectors", "Motion vector buffer (float format)", true /* optional */, ResourceFormat::RG32Float },
-        { kInputReSTIRColor, "gReSTIRColor", "Final ReSTIR Color", true /*optional*/, ResourceFormat::Unknown },
     };
 
     const std::string kOutputColor = "color";
     const std::string kOutputEmission = "emission";
-    const std::string kOutputDiffuseRadiance = "diffuseRadiance";
-    const std::string kOutputSpecularRadiance = "specularRadiance";
-    const std::string kOutputDiffuseReflectance = "diffuseReflectance";
-    const std::string kOutputSpecularReflectance = "specularReflectance";
-    const std::string kOutputResidualRadiance = "residualRadiance"; // The rest (transmission, delta)
+    const std::string kOutputThp = "thp";
+    const std::string kOutputView = "view";
+    const std::string kOutputPrevView = "prevView";
+    const std::string kOutputVBuffer = "vbufferOut";
 
     const Falcor::ChannelList kOutputChannels{
         {kOutputColor, "gOutColor", "Output Color (linear)", true /*optional*/, ResourceFormat::RGBA32Float},
-        {kOutputEmission, "gOutEmission", "Output Emission", true /*optional*/, ResourceFormat::RGBA32Float}
+        { kOutputEmission,               "gOutEmission",             "Output Emission", true /*optional*/, ResourceFormat::RGBA32Float },
+        { kOutputVBuffer, "gVBufferOut", "VBuffer traced to first diffuse hit", true /*optional*/, HitInfo::kDefaultFormat },
+        { kOutputThp, "gThpOut", "Throughput for the pixel", true /*optional*/, ResourceFormat::RGBA16Float },
+        { kOutputView, "gViewOut", "View dir current pixel. Orientation: To hit", true /*optional*/, ResourceFormat::RGBA32Float },
+        { kOutputPrevView, "gPrevViewOut", "View dir last frame. Orientation: To hit", true /*optional*/, ResourceFormat::RGBA32Float },
     };
 
     const Gui::DropdownList kResamplingModeList{
@@ -475,10 +477,6 @@ void ReSTIR_GI::traceTransmissiveDelta(RenderContext* pRenderContext, const Rend
     var["gOutViewDir"] = mpViewDir;
     var["gOutRayDist"] = mpRayDist;
     var["gOutVBuffer"] = mpVBuffer;
-    if (renderData[kOutputDiffuseReflectance])
-        var["gOutDiffuseReflectance"] = renderData[kOutputDiffuseReflectance]->asTexture();
-    if (renderData[kOutputSpecularReflectance])
-        var["gOutSpecularReflectance"] = renderData[kOutputSpecularReflectance]->asTexture();
 
     // Create dimensions based on the number of VPLs
     assert(mScreenRes.x > 0 && mScreenRes.y > 0);
@@ -657,14 +655,13 @@ void ReSTIR_GI::finalShadingPass(RenderContext* pRenderContext, const RenderData
     var["gReservoir"] = mpReservoirBuffer[reservoirIndex];
     var["gGISampleData"] = mpPathSampelDataBuffer[reservoirIndex];
 
-    var["gReSTIRColor"] = renderData[kInputReSTIRColor]->asTexture();
     var["gThp"] = mpThp;
     var["gView"] = mpViewDir;
     var["gVBuffer"] = mpVBuffer;
     var["gMVec"] = renderData[kInputMotionVectors]->asTexture();
 
-    // Bind all Output Channels
-    for (uint i = 0; i < kOutputChannels.size(); i++)
+    // Bind first two Output Channels
+    for (uint i = 0; i < 2; i++)
     {
         if (renderData[kOutputChannels[i].name])
             var[kOutputChannels[i].texname] = renderData[kOutputChannels[i].name]->asTexture();
@@ -688,6 +685,47 @@ void ReSTIR_GI::copyViewTexture(RenderContext* pRenderContext, const RenderData&
     {
         pRenderContext->copyResource(mpViewDirPrev.get(), mpViewDir.get());
     }
+}
+
+void ReSTIR_GI::copyReSTIRTexture(RenderContext* pRenderContext, const RenderData& renderData)
+{
+    PROFILE("CopyReSTIRTextures");
+    // Create pass
+    if (!mpCopyReSTIRResourcesPass)
+    {
+        Program::Desc desc;
+        //desc.addShaderModules(mpScene->getShaderModules());
+        desc.addShaderLibrary(kCopyReSTIRResourcesShader).csEntry("main").setShaderModel(kShaderModel);
+        //desc.addTypeConformances(mpScene->getTypeConformances());
+
+        Program::DefineList defines;
+        defines.add(mpScene->getSceneDefines());
+        defines.add(getValidResourceDefines(kOutputChannels, renderData));
+
+        mpCopyReSTIRResourcesPass = ComputePass::create(desc, defines, true);
+    }
+    assert(mpCopyReSTIRResourcesPass);
+
+    mpCopyReSTIRResourcesPass->getProgram()->addDefines(getValidResourceDefines(kOutputChannels, renderData));
+
+    // Set variables
+    auto var = mpCopyReSTIRResourcesPass->getRootVar();
+
+    mpScene->setRaytracingShaderData(pRenderContext, var, 1); // Set scene data
+
+    var["gThpOut"] = renderData[kOutputThp]->asTexture();
+    var["gViewOut"] = renderData[kOutputView]->asTexture();
+    var["gPrevViewOut"] = renderData[kOutputPrevView]->asTexture();
+    var["gVBufferOut"] = renderData[kOutputVBuffer]->asTexture();
+
+    var["gThpIn"] = mpThp;
+    var["gViewIn"] = mpViewDir;
+    var["gPrevViewIn"] = mpViewDir;
+    var["gVBufferIn"] = mpVBuffer;
+    // Execute
+    const uint2 targetDim = renderData.getDefaultTextureDims();
+    assert(targetDim.x > 0 && targetDim.y > 0);
+    mpCopyReSTIRResourcesPass->execute(pRenderContext, uint3(targetDim, 1));
 }
 
 void ReSTIR_GI::computeQuadTexSize(uint maxItems, uint& outWidth, uint& outHeight)

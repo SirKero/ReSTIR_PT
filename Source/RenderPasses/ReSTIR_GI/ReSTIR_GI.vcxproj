@@ -36,6 +36,7 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
+    <ShaderSource Include="CopyReSTIRResources.cs.slang" />
     <ShaderSource Include="FinalShading.cs.slang" />
     <ShaderSource Include="GeneratePathSamples.rt.slang" />
     <ShaderSource Include="PathData.slang" />

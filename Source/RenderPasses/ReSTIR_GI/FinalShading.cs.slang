@@ -41,7 +41,6 @@ Texture2D<PackedHitInfo> gVBuffer;
 Texture2D<float2> gMVec;
 Texture2D<float4> gView;
 Texture2D<float4> gThp;
-Texture2D<float4> gReSTIRColor;
 RWTexture2D<float4> gOutColor;
 RWTexture2D<float4> gOutEmission;
 
@@ -188,10 +187,9 @@ void main(uint2 pixel : SV_DispatchThreadID)
             diffuse += fgRadiance * thp;  //TODO do this properly
     #endif
 
-        if (is_valid(gReSTIRColor) && kUseDirectLight)
-            color += gReSTIRColor[pixel].xyz; //This is direct hit only; could lead to artifacts
-        emission += sd.emissive; //Emission
-        color += emission; //Do this or demodulate it?
+        
+        //emission += sd.emissive; //Emission
+        //color += emission; //Do this or demodulate it?
     }
     else
     {

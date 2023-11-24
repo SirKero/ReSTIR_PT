@@ -16,6 +16,10 @@ import Lights;
 import Resampling;
 import Params;
 
+#ifndef VIEW_VALID
+#define VIEW_VALID 0
+#endif
+
 /** Performs spatial resampling by combining the output reservoir from the
     temporal resampling pass with one or multiple reservoirs from neighbor
     pixels.
@@ -34,6 +38,7 @@ struct SpatialResampling
     // Resources.
     [root] StructuredBuffer<PackedSurfaceData> surfaceData;
     Texture2D<uint> normalDepth;
+    Texture2D<float4> viewTexture;
     RWStructuredBuffer<PackedReservoir> reservoirs;
     StructuredBuffer<PackedReservoir> prevReservoirs;
     Texture1D<float2> neighborOffsets;
@@ -80,7 +85,11 @@ struct SpatialResampling
         print("-", sampleNext1D(sg));
 
         // Setup evaluation context.
+        #if VIEW_VALID
+        EvalContext evalContext = EvalContext::create(pixel, viewTexture[pixel].xyz, SurfaceData::createFromPacked(surfaceData[pixelIndex]));
+        #else
         EvalContext evalContext = EvalContext::create(pixel, frameDim, SurfaceData::createFromPacked(surfaceData[pixelIndex]));
+        #endif // VIEW_VALID
         if (!evalContext.isValid())
         {
             reservoirs[pixelIndex] = Reservoir::createEmpty().pack();

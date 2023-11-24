@@ -37,6 +37,7 @@
   </ItemGroup>
   <ItemGroup>
     <ShaderSource Include="CollectPhotons.rt.slang" />
+    <ShaderSource Include="CopyReSTIRResources.cs.slang" />
     <ShaderSource Include="FinalGatherData.slang" />
     <ShaderSource Include="FinalShading.cs.slang" />
     <ShaderSource Include="GenerateFinalGatherSamples.rt.slang" />
