@@ -266,7 +266,10 @@ void ReSTIRFG::renderUI(Gui::Widgets& widget)
         mPhotonCollectionRadiusStart.y = std::min(mPhotonCollectionRadiusStart.y, mPhotonCollectionRadiusStart.x);
         group.tooltip("Photon Radii for final gather and caustic collecton. First->Global, Second->Caustic");
         if (radiusChanged)
+        {
             mPhotonCollectRadius = mPhotonCollectionRadiusStart;
+            changed |= true;
+        }
 
 
         changed |= group.checkbox("Enable SPPM", mUseSPPM);
@@ -302,6 +305,9 @@ void ReSTIRFG::renderUI(Gui::Widgets& widget)
                 changed |= causticGroup.var("Caustic Temporal History Limit", mCausticTemporalFilterHistoryLimit, 1u, 512u, 1u);
                 causticGroup.tooltip("History Limit for the Temporal Caustic Filter");
             }
+
+            changed |= causticGroup.checkbox("Use Caustics for indirect", mUseCausticsForIndirectLight);
+            causticGroup.tooltip("Collects caustic photons for the final gather sample used in ReSTIR");
         }
 
         changed |= group.checkbox("Use Photon Culling", mUsePhotonCulling);
@@ -856,6 +862,7 @@ void ReSTIRFG::collectPhotons(RenderContext* pRenderContext, const RenderData& r
     mCollectPhotonPass.pProgram->addDefine("USE_REDUCED_RESERVOIR_FORMAT", mUseReducedReservoirFormat ? "1" : "0");
     mCollectPhotonPass.pProgram->addDefine("MODE_FINAL_GATHER", finalGatherRenderMode ? "1" : "0");
     mCollectPhotonPass.pProgram->addDefine("CAUSTIC_COLLECTION_MODE", std::to_string((uint)mCausticCollectMode));
+    mCollectPhotonPass.pProgram->addDefine("CAUSTIC_COLLECTION_INDIRECT", mUseCausticsForIndirectLight ? "1" : "0");
 
     if (!mCollectPhotonPass.pVars)
         mCollectPhotonPass.initProgramVars(mpScene, mpSampleGenerator);
