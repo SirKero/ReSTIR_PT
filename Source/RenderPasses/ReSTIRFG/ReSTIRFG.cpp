@@ -230,6 +230,13 @@ void ReSTIRFG::renderUI(Gui::Widgets& widget)
         group.tooltip("Number of specular/transmissive bounces. 0 -> direct hit only");
         group.checkbox("Require Diffuse Part", mTraceRequireDiffuseMat);
         group.tooltip("Requires a diffuse part in addition to delta lobes");
+        if (mTraceRequireDiffuseMat)
+        {
+            group.var("Roughness Cutoff", mTraceRoughnessCutoff, 0.0f, 1.0f, 0.01f);
+            group.tooltip("Materials with roughness over this threshold are still considered diffuse");
+            group.var("Diffuse Cutoff", mTraceDiffuseCutoff, 0.f, 1.f, 0.01f);
+            group.tooltip("Material only counts as diffuse if the mean diffuse part is over this value");
+        }
     }
 
     if (auto group = widget.group("PhotonMapper")) {
@@ -649,6 +656,8 @@ void ReSTIRFG::traceTransmissiveDelta(RenderContext* pRenderContext, const Rende
     PROFILE("TraceDeltaTransmissive");
 
     mTraceTransmissionDelta.pProgram->addDefines(getValidResourceDefines(kOutputChannels, renderData));
+    mTraceTransmissionDelta.pProgram->addDefine("TRACE_TRANS_SPEC_ROUGH_CUTOFF", std::to_string(mTraceRoughnessCutoff));
+    mTraceTransmissionDelta.pProgram->addDefine("TRACE_TRANS_SPEC_DIFFUSEPART_CUTOFF", std::to_string(mTraceDiffuseCutoff));
 
     if (!mTraceTransmissionDelta.pVars)
         mTraceTransmissionDelta.initProgramVars(mpScene, mpSampleGenerator);
@@ -749,6 +758,8 @@ void ReSTIRFG::generatePhotonsPass(RenderContext* pRenderContext, const RenderDa
     mGeneratePhotonPass.pProgram->addDefine("PHOTON_BUFFER_SIZE_CAUSTIC", std::to_string(mNumMaxPhotons[1]));
     mGeneratePhotonPass.pProgram->addDefine("USE_PHOTON_CULLING", mUsePhotonCulling ? "1" : "0");
     mGeneratePhotonPass.pProgram->addDefine("USE_CAUSTIC_CULLING", mUseCausticCulling ? "1" : "0");
+    mGeneratePhotonPass.pProgram->addDefine("TRACE_TRANS_SPEC_ROUGH_CUTOFF", std::to_string(mTraceRoughnessCutoff));
+    mGeneratePhotonPass.pProgram->addDefine("TRACE_TRANS_SPEC_DIFFUSEPART_CUTOFF", std::to_string(mTraceDiffuseCutoff));
 
 
     if (!mGeneratePhotonPass.pVars)

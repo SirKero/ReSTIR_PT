@@ -38,6 +38,8 @@ RWTexture2D<float4> gOutThp;
 #define is_valid(name) (is_valid_##name != 0)
 
 static const float kDemodulateMinReflectance = 0.01f;
+static const float kRoughnessCutoff = TRACE_TRANS_SPEC_ROUGH_CUTOFF;
+static const float kDiffuseCutoff = TRACE_TRANS_SPEC_DIFFUSEPART_CUTOFF;
 
 struct TraceData
 {
@@ -140,8 +142,16 @@ void rayGen()
         if (!sampleBSDF(sd, traceData.sg, bsdfSample, true))
             break;
 
+        if (any(isinf(bsdfSample.weight)) || any(isnan(bsdfSample.weight)) || any(bsdfSample.weight < 0))
+            break;
+            
         bool isTransmission = bsdfSample.isLobe(LobeType::Transmission);
-        bool hasDiffuseParts = gRequDiffParts ? luminance(sd.diffuse) > 0 : true;
+        float3 sum = (sd.diffuse + sd.specular);
+        float3 diffuseProb;
+        for (uint i = 0; i < 3;i++)
+            diffuseProb[i] = sum[i] > 0 ? sd.diffuse[i]/sum[i] : 1.f;
+        float meanDiffuseProb = (diffuseProb.x + diffuseProb.y + diffuseProb.z) / 3;
+        bool hasDiffuseParts = gRequDiffParts ? (meanDiffuseProb > kDiffuseCutoff) || sd.linearRoughness > kRoughnessCutoff : true;
         //bool isDiffuse = bsdfSample.isLobe(LobeType::Diffuse) && !isTransmission;
         bool isDiffuse = bsdfSample.isLobe(LobeType::NonDeltaReflection) && hasDiffuseParts;
 

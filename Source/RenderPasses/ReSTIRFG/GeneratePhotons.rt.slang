@@ -67,6 +67,8 @@ static const bool kUseCausticCulling = USE_CAUSTIC_CULLING;
 static const uint kRayFlagTerminatedMiss = 1;
 static const uint kRayFlagTerminatedHit = 2;
 
+static const float kTraceRoughnessCutoff = TRACE_TRANS_SPEC_ROUGH_CUTOFF;
+static const float kTraceDiffuseCutoff = TRACE_TRANS_SPEC_DIFFUSEPART_CUTOFF;
 
 
 /** Payload for scatter ray (80B).
@@ -264,11 +266,14 @@ void closestHit(inout RayData rayData : SV_RayPayload, BuiltInTriangleIntersecti
     */
     
     BSDFSample_ bsdfSample;
+    float3 diffuseProb = sd.diffuse / (sd.diffuse + sd.specular);
+    float meanDiffuseProb = (diffuseProb.x + diffuseProb.y + diffuseProb.z) / 3;
     bool hasDiffuseParts = (gFlags & (uint) GenerationFlags::DeltaRejReqDiff) ? 
-    luminance(sd.diffuse) > 0 : true;
+    (meanDiffuseProb > kTraceDiffuseCutoff) || sd.linearRoughness > kTraceRoughnessCutoff : true;
 
     bool valid = sampleBSDF(sd, rayData.sg, bsdfSample, true /*ImportanceSampling*/);
 
+    valid &= all(!isinf(bsdfSample.weight) && !isnan(bsdfSample.weight));
     float3 thpStart = rayData.thp;
     
     bool transmission = bsdfSample.isLobe(LobeType::Transmission);
@@ -285,7 +290,7 @@ void closestHit(inout RayData rayData : SV_RayPayload, BuiltInTriangleIntersecti
 
     
     //if throughput is 0, return
-    if (!valid || any(rayData.thp <= 0))
+    if (!valid || all(rayData.thp <= 0))
         rayData.terminated |= kRayFlagTerminatedHit;
 }
 
