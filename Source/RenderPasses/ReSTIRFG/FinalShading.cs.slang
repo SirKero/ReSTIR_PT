@@ -210,6 +210,9 @@ void main(uint2 pixel : SV_DispatchThreadID)
             }
         }
     }
+
+    if(any(isnan(color)) || any(isinf(color)))
+        return;
         
     if (is_valid(gOutColor))
         gOutColor[pixel] = float4(color, 1.f);
