@@ -94,6 +94,7 @@ ShadingData loadShadingData(const HitInfo hit, const float3 rayDir)
     VertexData v = gScene.getVertexData(triangleHit);
     uint materialID = gScene.getMaterialID(triangleHit.instanceID);
     ShadingData sd = prepareShadingData(v, materialID, gScene.materials[materialID], gScene.materialResources[materialID], -rayDir, 0.f);
+    adjustShadingNormal(sd, v);
     
     return sd;
 }
@@ -204,6 +205,7 @@ void rayGen()
         //Use only BRDF
         sd.setActiveLobes((uint) LobeType::Reflection);
 
+        
         //uint hints = (uint) MaterialInstanceHints::AdjustShadingNormal;
         //let bsdf = gScene.materials.getMaterialInstance(sd, lod, hints);
         //let bsdfProperties = bsdf.getProperties(sd);

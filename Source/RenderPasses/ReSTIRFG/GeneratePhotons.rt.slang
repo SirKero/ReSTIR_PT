@@ -256,14 +256,10 @@ void closestHit(inout RayData rayData : SV_RayPayload, BuiltInTriangleIntersecti
     const uint materialID = gScene.getMaterialID(instanceID);
     ShadingData sd = prepareShadingData(v, materialID, gScene.materials[materialID], gScene.materialResources[materialID], incomingRayDir, 0.f);    
 
-    //Adjust shading normals if desired
-    /*
-    uint hints = 0;
     if (gFlags & (uint) GenerationFlags::AdjShadingNormals)
     {
-        hints |= (uint) MaterialInstanceHints::AdjustShadingNormal;
+        adjustShadingNormal(sd, v);
     }
-    */
     
     BSDFSample_ bsdfSample;
     float3 diffuseProb = sd.diffuse / (sd.diffuse + sd.specular);
