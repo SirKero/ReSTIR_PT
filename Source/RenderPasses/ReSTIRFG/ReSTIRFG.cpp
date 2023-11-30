@@ -43,6 +43,8 @@ namespace
 
     const std::string kShaderModel = "6_5";
     const uint kMaxPayloadBytes = 96u;
+    const uint kMaxPayloadBytesGenerateFGSamples = 20u;
+
 
     //Render Pass inputs and outputs
     const std::string kInputVBuffer = "vbuffer";
@@ -644,7 +646,7 @@ void ReSTIRFG::prepareAccelerationStructure() {
 
 void ReSTIRFG::prepareRayTracingShaders(RenderContext* pRenderContext) {
     //TODO specify the payload bytes for each pass
-    mFinalGatherSamplePass.initRTProgram(mpScene, kFinalGatherSamplesShader, kMaxPayloadBytes);
+    mFinalGatherSamplePass.initRTProgram(mpScene, kFinalGatherSamplesShader, kMaxPayloadBytesGenerateFGSamples);
     mGeneratePhotonPass.initRTProgram(mpScene, kGeneratePhotonsShader, kMaxPayloadBytes);
     mTraceTransmissionDelta.initRTProgram(mpScene, kTraceTransmissionDeltaShader, kMaxPayloadBytes);
 
@@ -884,6 +886,10 @@ void ReSTIRFG::collectPhotons(RenderContext* pRenderContext, const RenderData& r
     mCollectPhotonPass.pProgram->addDefine("MODE_FINAL_GATHER", finalGatherRenderMode ? "1" : "0");
     mCollectPhotonPass.pProgram->addDefine("CAUSTIC_COLLECTION_MODE", std::to_string((uint)mCausticCollectMode));
     mCollectPhotonPass.pProgram->addDefine("CAUSTIC_COLLECTION_INDIRECT", mUseCausticsForIndirectLight ? "1" : "0");
+
+    mCollectPhotonPass.pProgram->addDefine("TRACE_TRANS_SPEC_ROUGH_CUTOFF", std::to_string(mTraceRoughnessCutoff));
+    mCollectPhotonPass.pProgram->addDefine("TRACE_TRANS_SPEC_DIFFUSEPART_CUTOFF", std::to_string(mTraceDiffuseCutoff));
+    mCollectPhotonPass.pProgram->addDefine("REJECT_FGSAMPLE_DIFFUSE_SURFACE", (mGenerationDeltaRejectionRequireDiffPart && mTraceRequireDiffuseMat) ? "1" : "0");
 
     if (!mCollectPhotonPass.pVars)
         mCollectPhotonPass.initProgramVars(mpScene, mpSampleGenerator);

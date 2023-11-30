@@ -84,6 +84,10 @@ RaytracingAccelerationStructure gPhotonAS;
 static const bool kCollectCaustics = CAUSTIC_COLLECTION_MODE != CAUSTIC_COLLECT_MODE_NONE;
 static const bool kCollectCausticsForIndirect = CAUSTIC_COLLECTION_INDIRECT;
 
+static const float kRejectDiffuseSurfaces = REJECT_FGSAMPLE_DIFFUSE_SURFACE;    //Uses same definition as photon generation
+static const float kTraceRoughnessCutoff = TRACE_TRANS_SPEC_ROUGH_CUTOFF;
+static const float kTraceDiffuseCutoff = TRACE_TRANS_SPEC_DIFFUSEPART_CUTOFF;
+
 /** Payload for ray (48B).
 */
 struct RayData
@@ -291,6 +295,10 @@ void rayGen()
     #elif !MODE_FINAL_GATHER //END Caustic mode temporal; Store Caustic tex if not Final Gather mode
     gCausticOut[launchIndex] = float4(causticRadiance, 1.f);
     #endif
+
+    //
+    //Final Gather Sample Photon Collection
+    //
     
     rayData.radiance = float3(0);
     rayData.packedHitInfo = gFinalGatherHit[launchIndex];
@@ -301,11 +309,13 @@ void rayGen()
     float jacoDeter = -1.f;
 
     ShadingData sd = { };
-    
+
     if (valid)
     {
         TriangleHit triangleHit = hit.getTriangleHit();
         VertexData v = gScene.getVertexData(triangleHit);
+        
+        
         ray.Direction = v.posW - ray.Origin; //Sample dir is used here to save payload space
         float distToFG = length(ray.Direction); //Distance for Jacobian determinant
         ray.Direction /= distToFG; //Normalize
@@ -313,16 +323,29 @@ void rayGen()
         ray.Origin = v.posW; //Update origin
         ray.TMin = 0.0;
         ray.TMax = 0.001;
-                
+
         uint materialID = gScene.getMaterialID(triangleHit.instanceID);
         sd = prepareShadingData(v, materialID, gScene.materials[materialID], gScene.materialResources[materialID], -ray.Direction, 0.f);
-            
         
+        uint lobeTypes = sd.getActiveLobes();
+        bool hasDiffuseParts = true;
+        if(kRejectDiffuseSurfaces)
+        {
+            float3 diffuseProb = sd.diffuse / (sd.diffuse + sd.specular);
+            float meanDiffuseProb = (diffuseProb.x + diffuseProb.y + diffuseProb.z) / 3;
+            bool hasDiffuseParts = (meanDiffuseProb > kTraceDiffuseCutoff) || (sd.linearRoughness > kTraceRoughnessCutoff);
+        }
+        //Reject surfaces where no photons are stored anyway. The emissive case is handled by ReSTIR for Direct Lights
+        bool isDiffuse = hasDiffuseParts && !any(sd.emissive > 0);
+        valid &= isDiffuse;   
+            
         //Jacobian Determinant (only needed for resampling)
 #if !MODE_FINAL_GATHER
         jacoDeter = vplAttenuation(distToFG, gAttenuationRadius) * saturate(dot(sd.N, sd.V));
 #endif
-        
+    }
+
+    if(valid){
         TraceRay(gPhotonAS, rayFlags, 1 /* instanceInclusionMask */, 0 /* hitIdx */, 0 /* rayType count */, 0 /* missIdx */, ray, rayData);
         float w = 1 / (M_PI * gPhotonRadius.x * gPhotonRadius.x);
         fgRadiance += w * rayData.radiance;
@@ -359,9 +382,7 @@ void rayGen()
 
      //Create the final gather sample
     FGData fgData = { };
-    bool fgValid = true;
-    if (isnan(Li) || isinf(Li))
-        fgValid = false;
+    bool fgValid = !isnan(Li) && !isinf(Li);
     fgData.posW = sd.computeNewRayOrigin();
     fgData.normal = sd.N;
     fgData.flux = fgRadiance;

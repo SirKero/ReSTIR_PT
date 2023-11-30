@@ -61,24 +61,15 @@ static const bool kUseCausticPhotons = USE_CAUSTIC_CULLING;
 struct TraceData
 {
     PackedHitInfo packedHitInfo; //< Reflection albedo of the current hit point
-    uint packedNormal; ///< Face normal encoded in 16 bit polar coordinates
-    float distance; ///< 
-    float NdotL; ///< NdotL precalculated for targetPDF
-    uint _pad;
-
-    SampleGenerator sg; ///< Per-ray state for the sample generator (up to 16B).
+    float distance; ///<Current hit distance
     
     /** Create ray payload with default parameters.
     */
     static TraceData create()
     {
         TraceData d;
-        d.NdotL = 0.f;
-        d.packedHitInfo = {
-        };
-        d.packedNormal = 0;
+        d.packedHitInfo = {};
         d.distance = -1;
-        d._pad = 0;
         return d;
     }
 };
@@ -165,23 +156,10 @@ void closestHit(inout TraceData rayData : SV_RayPayload, BuiltInTriangleIntersec
     triangleHit.instanceID = getGeometryInstanceID();
     triangleHit.primitiveIndex = PrimitiveIndex();
     triangleHit.barycentrics = attribs.barycentrics;
-    VertexData v = getVertexData(triangleHit.instanceID, PrimitiveIndex(), attribs);
-    const uint materialID = gScene.getMaterialID(triangleHit.instanceID);
-    ShadingData sd = prepareShadingData(v, materialID, gScene.materials[materialID], gScene.materialResources[materialID], incomingRayDir, 0.f);
 
-    //TODO Add Alternative. Sample a new direction using BSDF and take reflective lobe
-    
-    bool diffuseHit = luminance(sd.diffuse) > 0;
-    diffuseHit &= luminance(sd.emissive) <= 0; //Ignore emissive hits, as they are sampled by ReSTIR
-    
-    if(diffuseHit){
-        rayData.distance = RayTCurrent();
-        rayData.packedNormal = encodeNormal2x16(sd.N);
-        rayData.packedHitInfo = HitInfo(triangleHit).pack();
-        rayData.NdotL = saturate(dot(sd.N, incomingRayDir));
-    }else{
-        rayData.distance = -1.f;
-    }
+    //Fill hit data
+    rayData.distance = RayTCurrent();
+    rayData.packedHitInfo = HitInfo(triangleHit).pack();
 }
 
 [shader("raygeneration")]
@@ -204,16 +182,11 @@ void rayGen()
         
         //Use only BRDF
         sd.setActiveLobes((uint) LobeType::Reflection);
-
         
-        //uint hints = (uint) MaterialInstanceHints::AdjustShadingNormal;
-        //let bsdf = gScene.materials.getMaterialInstance(sd, lod, hints);
-        //let bsdfProperties = bsdf.getProperties(sd);
-
-        traceData.sg = SampleGenerator(launchIndex, gFrameCount + 3 * 13);
+        SampleGenerator sg = SampleGenerator(launchIndex, gFrameCount + 3 * 13);
 
         BSDFSample_ bsdfSample;
-        bool validSample = sampleBSDF(sd, traceData.sg, bsdfSample);
+        bool validSample = sampleBSDF(sd, sg, bsdfSample);
         
         //Fill Surface Buffer used for calculating the target PDF
         surface = SurfaceFG::create(sd.computeNewRayOrigin(), sd.N, sd.V, viewDepth, sd.linearRoughness,
@@ -257,7 +230,6 @@ void rayGen()
     }
     
     //Store data in buffers
-    //gLightFactor[launchIndex] = lightFactor;
     gFinalGatherHit[launchIndex] = traceData.packedHitInfo;
     gSurfaceData[index2Dto1D(launchIndex, launchDim.x)] = surface.pack();   //TODO better index
     
