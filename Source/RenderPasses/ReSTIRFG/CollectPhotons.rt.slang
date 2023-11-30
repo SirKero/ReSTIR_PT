@@ -36,6 +36,15 @@ import FinalGatherData;
 #define CAUSTIC_COLLECT_MODE_GREATERONE 2
 #define CAUSTIC_COLLECT_MODE_TEMPORAL 3
 
+//Stochastic Collect
+#ifndef USE_STOCHASTIC_COLLECT
+#define USE_STOCHASTIC_COLLECT 0
+#endif
+
+#ifndef STOCH_NUM_PHOTONS
+#define STOCH_NUM_PHOTONS 3
+#endif
+
 cbuffer PerFrame
 {
     uint gFrameCount; // Frame count since scene was loaded.
@@ -88,8 +97,23 @@ static const float kRejectDiffuseSurfaces = REJECT_FGSAMPLE_DIFFUSE_SURFACE;    
 static const float kTraceRoughnessCutoff = TRACE_TRANS_SPEC_ROUGH_CUTOFF;
 static const float kTraceDiffuseCutoff = TRACE_TRANS_SPEC_DIFFUSEPART_CUTOFF;
 
-/** Payload for ray (48B).
+/** Payload for photon collection. Collect all (48B) and Stochastic Collect (32 + X B) available
 */
+#if USE_STOCHASTIC_COLLECT
+struct RayData
+{
+    uint counter;                   //Counter for photons this pixel
+    uint photonIdx[STOCH_NUM_PHOTONS];    //Num Photons, variable length. Should be 3 + 4*X for best fit.
+
+    SampleGenerator sg; ///< Per-ray state for the sample generator (up to 16B).
+
+    __init(){
+        this.counter = 0;
+        for(uint i=0; i<STOCH_NUM_PHOTONS; i++)
+            this.photonIdx[i] = 0;
+    }
+};
+#else //USE_STOCHASTIC_COLLECT
 struct RayData
 {
     float3 radiance; ///< Accumulated outgoing radiance from path.
@@ -103,10 +127,11 @@ struct RayData
         this.countPhotons = 0;
     }
 };
+#endif //USE_STOCHASTIC_COLLECT
 
 struct SphereAttribs
 {
-    float2 pad;
+    float pad;
 };
 
 //Load in shading data from hit and direction
@@ -144,6 +169,28 @@ void miss(inout RayData rayData : SV_RayPayload)
 }
 
 
+//Photon Collection via anyHit
+#if USE_STOCHASTIC_COLLECT
+[shader("anyhit")]
+void anyHit(inout RayData rayData : SV_RayPayload, SphereAttribs attribs : SV_IntersectionAttributes)
+{
+    const uint primIndex = PrimitiveIndex();
+
+    uint idx = rayData.counter;
+    rayData.counter++;
+
+    //Reservoir sampling
+    //If photon list is full we get a random index between 0 and number of elements (rayData.counter) to stochastically insert
+    if (idx >= STOCH_NUM_PHOTONS)
+    {
+        idx = uint(sampleNext1D(rayData.sg) * rayData.counter);
+    }
+    //Insert if index is within maximum list size
+    if (idx < STOCH_NUM_PHOTONS)
+        rayData.photonIdx[idx] = primIndex;
+}
+
+#else //USE_STOCHASTIC_COLLECT
 [shader("anyhit")]
 void anyHit(inout RayData rayData : SV_RayPayload, SphereAttribs attribs : SV_IntersectionAttributes)
 {
@@ -175,6 +222,7 @@ void anyHit(inout RayData rayData : SV_RayPayload, SphereAttribs attribs : SV_In
     if(NdotL > 0)
         rayData.radiance += max(0.f, (f_r * pd.flux) / NdotL);
 }
+#endif //USE_STOCHASTIC_COLLECT
 
 //Checks if the ray start point is inside the sphere.
 bool hitSphere(const float3 center, const float radius, const float3 p)
@@ -203,13 +251,46 @@ void intersection()
 
     //Attribs are needed by the api. Because we have no need for additional attributes it is empty
     SphereAttribs attribs;
-    attribs.pad = float2(0);
+    attribs.pad = 0.f;
 
     //Report the hit if the point is in the sphere
     if (tHit)
     {
         ReportHit(RayTCurrent(), 0, attribs);
     }
+}
+
+//Lighting Calculation for each photon in the list. This is done seperatly for caustic and global photons
+float3 stochPhotonContribution(in const ShadingData sd, inout RayData rayData, bool isCaustic)
+{
+    #if USE_STOCHASTIC_COLLECT
+    //Get the size of the list to loop through. 
+    uint maxIdx = min(rayData.counter, STOCH_NUM_PHOTONS);
+    float3 radiance = float3(0);
+
+    //Return when there is no element
+    if (maxIdx == 0)
+        return radiance;
+
+    //loop through the list and accumulate photons
+    for (uint i = 0; i < maxIdx; i++)
+    {
+        //Get Photon info
+        uint instanceIndex = isCaustic ? 1 : 0;
+        PhotonData pd = PhotonData(gPackedPhotonData[instanceIndex][rayData.photonIdx[i]]);
+
+        float3 f_r = evalBSDFCosine(sd, pd.dir); //right sign?
+        float NdotL = saturate(dot(sd.N, pd.dir));
+        if(NdotL > 0)
+            radiance += max(0.f, (f_r * pd.flux) / NdotL);
+    }
+
+    //Weight output radiance with number of photons for this pixel.
+    //The weight equals 1 if there is less or equal than the maximum list size in the photon array. (Reservoir sampling)
+    return radiance * (float(rayData.counter) / float(maxIdx));
+    #else
+    return float3(0);
+    #endif
 }
 
 
@@ -225,15 +306,21 @@ void rayGen()
     
     //Prepare payload
     RayData rayData = RayData();
-    rayData.packedHitInfo = gVBuffer[launchIndex];
     rayData.sg = SampleGenerator(launchIndex, gFrameCount + 3 * 12);
 
-    HitInfo hit = HitInfo(rayData.packedHitInfo);
+    PackedHitInfo packedHit = gVBuffer[launchIndex];
+    #if !USE_STOCHASTIC_COLLECT
+    rayData.packedHitInfo = packedHit;
+    #endif //!USE_STOCHASTIC_COLLECT
+    HitInfo hit = HitInfo(packedHit);
+    
     bool valid = hit.isValid(); //Check if the ray is valid
-    #if MODE_FINAL_GATHER
+
+    float3 view = -gView[launchIndex].xyz;
+    #if MODE_FINAL_GATHER || USE_STOCHASTIC_COLLECT
     ShadingData fgSD = {};
     if(valid){
-        fgSD = loadShadingData(hit, -gView[launchIndex].xyz); //TODO remove
+        fgSD = loadShadingData(hit, view); 
     }
     #endif
 
@@ -251,18 +338,22 @@ void rayGen()
         ray.Origin = v.posW;
         ray.TMin = 0.0;
         ray.TMax = 0.001;
-        ray.Direction = -gView[launchIndex].xyz; //we take the view dir as direction to save payload space
+        ray.Direction = view; //we take the view dir as direction to save payload space
         
         //Collect Caustic Photon
         TraceRay(gPhotonAS, rayFlags, 2 /* instanceInclusionMask */, 0 /* hitIdx */, 0 /* rayType count */, 0 /* missIdx */, ray, rayData);
         float w = 1 / (M_PI * gPhotonRadius.y * gPhotonRadius.y);
+    #if USE_STOCHASTIC_COLLECT
+            //Load shading data and materialInstance
+            causticRadiance += w * stochPhotonContribution(fgSD, rayData, true);
+    #else // USE_STOCHASTIC_COLLECT
         #if (CAUSTIC_COLLECTION_MODE == CAUSTIC_COLLECT_MODE_GREATERONE)
-        if(rayData.countPhotons > 1)
-        #endif
-        causticRadiance += w * rayData.radiance;
+            if(rayData.countPhotons > 1)
+        #endif // CAUSTIC_COLLECTION_MODE == CAUSTIC_COLLECT_MODE_GREATERONE
+            causticRadiance += w * rayData.radiance;
+    #endif // USE_STOCHASTIC_COLLECT
    
     }
-
      //Temporal Caustic Filter
     #if (CAUSTIC_COLLECTION_MODE == CAUSTIC_COLLECT_MODE_TEMPORAL)
     //Get Motion Vector and get reprojected pixel
@@ -299,10 +390,16 @@ void rayGen()
     //
     //Final Gather Sample Photon Collection
     //
-    
+
+     packedHit = gFinalGatherHit[launchIndex];
+#if USE_STOCHASTIC_COLLECT
+        rayData = RayData();    //Reset Payload
+#else
     rayData.radiance = float3(0);
-    rayData.packedHitInfo = gFinalGatherHit[launchIndex];
-    hit = HitInfo(rayData.packedHitInfo);
+    rayData.packedHitInfo = packedHit;
+#endif // USE_STOCHASTIC_COLLECT
+
+    hit = HitInfo(packedHit);
     valid &= hit.isValid(); //Check if the final gather ray is valid
 
     float3 fgRadiance = float3(0);
@@ -348,16 +445,27 @@ void rayGen()
     if(valid){
         TraceRay(gPhotonAS, rayFlags, 1 /* instanceInclusionMask */, 0 /* hitIdx */, 0 /* rayType count */, 0 /* missIdx */, ray, rayData);
         float w = 1 / (M_PI * gPhotonRadius.x * gPhotonRadius.x);
+    #if USE_STOCHASTIC_COLLECT
+        fgRadiance += w * stochPhotonContribution(sd, rayData, false);
+    #else
         fgRadiance += w * rayData.radiance;
-
+    #endif 
         //Caustic photon collection for indirect light
         if(kCollectCaustics && kCollectCausticsForIndirect)
         {
+        #if USE_STOCHASTIC_COLLECT
+            rayData = RayData();    //Reset Payload
+        #else
             rayData.radiance = float3(0);
+        #endif
             //Add caustic indirect radiance
             TraceRay(gPhotonAS, rayFlags, 2 /* instanceInclusionMask */, 0 /* hitIdx */, 0 /* rayType count */, 0 /* missIdx */, ray, rayData);
             w = 1 / (M_PI * gPhotonRadius.y * gPhotonRadius.y);
+        #if USE_STOCHASTIC_COLLECT
+            fgRadiance += w * stochPhotonContribution(sd, rayData, true);
+        #else
             fgRadiance += w * rayData.radiance;
+        #endif 
         }
     }
 
