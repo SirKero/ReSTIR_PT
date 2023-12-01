@@ -477,8 +477,13 @@ void rayGen()
         color = max(0.f, fgRadiance * r.weightSum);
         color *= evalBSDFCosine(fgSD, ray.Direction);
     }
-        
-    gColor[launchIndex] = float4(color + causticRadiance, 1.f);
+
+    color += causticRadiance;
+    
+    if(any(isnan(color)) || any(isinf(color)))
+        return;
+    
+    gColor[launchIndex] = float4(color, 1.f);
 
 #else
    
