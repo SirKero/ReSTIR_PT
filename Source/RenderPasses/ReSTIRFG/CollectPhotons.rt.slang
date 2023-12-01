@@ -176,6 +176,15 @@ void anyHit(inout RayData rayData : SV_RayPayload, SphereAttribs attribs : SV_In
 {
     const uint primIndex = PrimitiveIndex();
 
+    //Get Photon data
+    PhotonData pd = PhotonData(gPackedPhotonData[InstanceIndex()][primIndex]);
+
+    //Check if photon sample is in valid hemisphere
+    if (dot(pd.dir, WorldRayDirection()) <= 0) 
+    {
+        return;
+    }
+        
     uint idx = rayData.counter;
     rayData.counter++;
 
@@ -338,7 +347,11 @@ void rayGen()
         ray.Origin = v.posW;
         ray.TMin = 0.0;
         ray.TMax = 0.001;
+    #if USE_STOCHASTIC_COLLECT
+        ray.Direction = fgSD.faceN; //we take the face Normal as direction to save payload space
+    #else
         ray.Direction = view; //we take the view dir as direction to save payload space
+    #endif
         
         //Collect Caustic Photon
         TraceRay(gPhotonAS, rayFlags, 2 /* instanceInclusionMask */, 0 /* hitIdx */, 0 /* rayType count */, 0 /* missIdx */, ray, rayData);
@@ -367,8 +380,8 @@ void rayGen()
     if (tempIndex.x >= 0 && tempIndex.y >= 0 && tempIndex.x < launchDim.x && tempIndex.y < launchDim.y)
     {
         //Load Surfaces
-        SurfaceFG currentSurface = getSurface(launchIndex, false, launchDim.x, ray.Direction);
-        SurfaceFG prevSurface = getSurface(tempIndex, false, launchDim.x, ray.Direction);
+        SurfaceFG currentSurface = getSurface(launchIndex, false, launchDim.x, view);
+        SurfaceFG prevSurface = getSurface(tempIndex, false, launchDim.x, view);
 
         if (currentSurface.isValidNeighbor(prevSurface, gDepthThreshold, gNormalThreshold, gMatThreshold))
         {
@@ -416,7 +429,11 @@ void rayGen()
         ray.Direction = v.posW - ray.Origin; //Sample dir is used here to save payload space
         float distToFG = length(ray.Direction); //Distance for Jacobian determinant
         ray.Direction /= distToFG; //Normalize
-    
+
+    #if MODE_FINAL_GATHER
+        view = ray.Direction;   //Store view for later
+    #endif
+        
         ray.Origin = v.posW; //Update origin
         ray.TMin = 0.0;
         ray.TMax = 0.001;
@@ -442,6 +459,10 @@ void rayGen()
 #endif
     }
 
+    #if USE_STOCHASTIC_COLLECT
+        ray.Direction = sd.faceN;   //Store faceN in direction
+    #endif // USE_STOCHASTIC_COLLECT
+    
     if(valid){
         TraceRay(gPhotonAS, rayFlags, 1 /* instanceInclusionMask */, 0 /* hitIdx */, 0 /* rayType count */, 0 /* missIdx */, ray, rayData);
         float w = 1 / (M_PI * gPhotonRadius.x * gPhotonRadius.x);
@@ -475,7 +496,7 @@ void rayGen()
     float3 color = float3(0);
     if(valid){
         color = max(0.f, fgRadiance * r.weightSum);
-        color *= evalBSDFCosine(fgSD, ray.Direction);
+        color *= evalBSDFCosine(fgSD, view);
     }
 
     color += causticRadiance;

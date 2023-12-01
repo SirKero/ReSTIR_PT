@@ -184,11 +184,7 @@ void main(uint2 pixel : SV_DispatchThreadID)
         diffuse += gCausticRadiance[pixel].xyz;
         color += diffuse * thp; //Add diffuse and specular parts together
     #endif
-        
-       
-        
-        
-        
+                
         //If only RTXDI is used, add the previous calculated light color
     #if !USE_RESTIRFG
             float3 fgRadiance = gOutColor[pixel].xyz;
