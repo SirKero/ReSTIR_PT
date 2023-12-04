@@ -76,7 +76,10 @@ void accumulateSingle(uint3 dispatchThreadId : SV_DispatchThreadID)
 {
     if (any(dispatchThreadId.xy >= gResolution)) return;
     const uint2 pixelPos = dispatchThreadId.xy;
-    const float4 curColor = gCurFrame[pixelPos];
+    float4 curColor = gCurFrame[pixelPos];
+
+    if(any(isnan(curColor)) || any(isinf(curColor)))
+         curColor = float4(0);
 
     float4 output;
     if (gAccumulate)
@@ -116,8 +119,11 @@ void accumulateSingleCompensated(uint3 dispatchThreadId : SV_DispatchThreadID)
 {
     if (any(dispatchThreadId.xy >= gResolution)) return;
     const uint2 pixelPos = dispatchThreadId.xy;
-    const float4 curColor = gCurFrame[pixelPos];
+    float4 curColor = gCurFrame[pixelPos];
 
+    if(any(isnan(curColor)) || any(isinf(curColor)))
+         curColor = float4(0);
+    
     float4 output;
     if (gAccumulate)
     {
@@ -149,8 +155,11 @@ void accumulateDouble(uint3 dispatchThreadId : SV_DispatchThreadID)
 {
     if (any(dispatchThreadId.xy >= gResolution)) return;
     const uint2 pixelPos = dispatchThreadId.xy;
-    const float4 curColor = gCurFrame[pixelPos];
+    float4 curColor = gCurFrame[pixelPos];
 
+    if(any(isnan(curColor)) || any(isinf(curColor)))
+        curColor = float4(0);
+    
     float4 output;
     if (gAccumulate)
     {
