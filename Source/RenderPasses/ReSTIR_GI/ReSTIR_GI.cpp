@@ -190,6 +190,13 @@ void ReSTIR_GI::renderUI(Gui::Widgets& widget)
         widget.tooltip("Number of specular/transmissive bounces. 0 -> direct hit only");
         widget.checkbox("Require Diffuse Part", mTraceRequireDiffuseMat);
         widget.tooltip("Requires a diffuse part in addition to delta lobes");
+        if (mTraceRequireDiffuseMat)
+        {
+            group.var("Roughness Cutoff", mTraceRoughnessCutoff, 0.0f, 1.0f, 0.01f);
+            group.tooltip("Materials with roughness over this threshold are still considered diffuse");
+            group.var("Diffuse Cutoff", mTraceDiffuseCutoff, 0.f, 1.f, 0.01f);
+            group.tooltip("Material only counts as diffuse if the mean diffuse part is over this value");
+        }
     }
 
     if (auto group = widget.group("ReSTIR_GI", true))
@@ -459,6 +466,8 @@ void ReSTIR_GI::traceTransmissiveDelta(RenderContext* pRenderContext, const Rend
     PROFILE("TraceDeltaTransmissive");
 
     mTraceTransmissionDelta.pProgram->addDefines(getValidResourceDefines(kOutputChannels, renderData));
+    mTraceTransmissionDelta.pProgram->addDefine("TRACE_TRANS_SPEC_ROUGH_CUTOFF", std::to_string(mTraceRoughnessCutoff));
+    mTraceTransmissionDelta.pProgram->addDefine("TRACE_TRANS_SPEC_DIFFUSEPART_CUTOFF", std::to_string(mTraceDiffuseCutoff));
 
     if (!mTraceTransmissionDelta.pVars)
         mTraceTransmissionDelta.initProgramVars(mpScene, mpSampleGenerator);

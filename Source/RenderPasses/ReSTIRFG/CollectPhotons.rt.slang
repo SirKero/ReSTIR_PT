@@ -92,10 +92,11 @@ RaytracingAccelerationStructure gPhotonAS;
 //Constant defines
 static const bool kCollectCaustics = CAUSTIC_COLLECTION_MODE != CAUSTIC_COLLECT_MODE_NONE;
 static const bool kCollectCausticsForIndirect = CAUSTIC_COLLECTION_INDIRECT;
-
+static const bool kRejectEmissive = true;
 static const float kRejectDiffuseSurfaces = REJECT_FGSAMPLE_DIFFUSE_SURFACE;    //Uses same definition as photon generation
 static const float kTraceRoughnessCutoff = TRACE_TRANS_SPEC_ROUGH_CUTOFF;
 static const float kTraceDiffuseCutoff = TRACE_TRANS_SPEC_DIFFUSEPART_CUTOFF;
+
 
 /** Payload for photon collection. Collect all (48B) and Stochastic Collect (32 + X B) available
 */
@@ -450,7 +451,10 @@ void rayGen()
             bool hasDiffuseParts = (meanDiffuseProb > kTraceDiffuseCutoff) || (sd.linearRoughness > kTraceRoughnessCutoff);
         }
         //Reject surfaces where no photons are stored anyway. The emissive case is handled by ReSTIR for Direct Lights
-        bool isDiffuse = hasDiffuseParts && !any(sd.emissive > 0);
+        bool isDiffuse = hasDiffuseParts;
+        if(kRejectEmissive)
+            isDiffuse &= !any(sd.emissive > 0);
+
         valid &= isDiffuse;   
             
         //Jacobian Determinant (only needed for resampling)

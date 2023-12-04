@@ -178,5 +178,9 @@ void rayGen()
     gOutVBuffer[launchIndex] = hitInfo.pack();
     gOutViewDir[launchIndex] = float4(viewDir, 1);
     gOutRayDist[launchIndex] = rayDist;
+
+    if(any(isnan(thp)) || any(isinf(thp)))
+        return;
+    
     gOutThp[launchIndex] = float4(thp, 1);
 }

@@ -148,6 +148,8 @@ private:
     // Specular Trace Options
     uint mTraceMaxBounces = 10;          // Number of Specular/Transmissive bounces allowed
     bool mTraceRequireDiffuseMat = true; // Requires a diffuse part in addition to delta lobes
+    float mTraceRoughnessCutoff = 0.7f;  //If diffuse part is required, dont trace if the roughness is too high
+    float mTraceDiffuseCutoff = 0.3f;    //If diffuse part is requred, it only counts as diffuse if any channel is over this value
 
     //Defines GI
     uint mGIMaxBounces = 3; // Max Bounces for GI
@@ -155,7 +157,6 @@ private:
     bool mGINEE = true;                 //Next event estimation in GI
     bool mGIMIS = true;                 //Use Multiple Importance Sampling
     bool mGIRussianRoulette = true;     //Use Russian Roulette in GI
-   
 
     // Reservoir
     bool mUseReducedReservoirFormat = false;         // Use a reduced reservoir format TODO: Add
