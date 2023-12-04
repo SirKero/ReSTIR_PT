@@ -251,17 +251,15 @@ void shadowMiss(inout ShadowTraceData shadowData : SV_RayPayload)
 [shader("anyhit")]
 void shadowAnyHit(inout ShadowTraceData shadowData : SV_RayPayload, BuiltInTriangleIntersectionAttributes attribs : SV_IntersectionAttributes)
 {
-/*
     if (kUseAlphaTest)
     {
-        // Alpha test for non-opaque geometry.
+       // Alpha test for non-opaque geometry.
         GeometryInstanceID instanceID = getGeometryInstanceID();
         VertexData v = getVertexData(instanceID, PrimitiveIndex(), attribs);
         uint materialID = gScene.getMaterialID(instanceID);
-        if (gScene.materials.alphaTest(v, materialID, 0.f))
+        if (alphaTest(v, gScene.materials[materialID], gScene.materialResources[materialID], 0.f))
             IgnoreHit();
     }
-    */
 }
 
 [shader("miss")]
