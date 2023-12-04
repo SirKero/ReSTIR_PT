@@ -60,7 +60,8 @@ struct FinalShading
         VertexData v = gScene.getVertexData(triangleHit);
         uint materialID = gScene.getMaterialID(triangleHit.instanceID);
         ShadingData sd = prepareShadingData(v, materialID, gScene.materials[materialID], gScene.materialResources[materialID], -rayDir, 0.f);
-    
+        adjustShadingNormal(sd, v);
+        
         return sd;
     }
     

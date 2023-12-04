@@ -207,7 +207,7 @@ void temporalResampling(uint2 pixel, inout Reservoir r, inout GIData giSample, i
         {
             SceneRayQuery < 0 > rayQuery;
             distance *= kRayEpsilon;
-            const Ray ray = Ray(temporalSurface.posW, ls.dir, 0.f, distance);
+            const RayDesc ray = { temporalSurface.posW, 0.0f, ls.dir, distance };
             if (!rayQuery.traceVisibilityRay(ray, RAY_FLAG_NONE, 0xff))
             {
                 ps = 0;
@@ -330,7 +330,7 @@ void spatialResampling(uint2 pixel, inout Reservoir r, inout GIData giSample, in
             {
                 SceneRayQuery < 0 > rayQuery;
                 dist *= kRayEpsilon;
-                const Ray ray = Ray(biasSurface.posW, ls.dir, 0.0f, dist);
+                const RayDesc ray = { biasSurface.posW, 0.0f, ls.dir, dist };
                 if (!rayQuery.traceVisibilityRay(ray, RAY_FLAG_CULL_NON_OPAQUE, 0xff))
                 {
                     ps = 0.0f;
@@ -385,7 +385,7 @@ void spatiotemporalResampling(uint2 pixel, inout Reservoir r, inout GIData giSam
         int2 idx = prevIdx + offset;
 
         //Clamp to edge
-        min(max(uint2(0), idx), gFrameDim - 1);
+        idx = clamp(idx, uint2(0), gFrameDim - 1);
         
         //Get Hit sample from last frame
         SurfaceGI temporalSurface = getSurface(idx, true);
@@ -521,7 +521,7 @@ void spatiotemporalResampling(uint2 pixel, inout Reservoir r, inout GIData giSam
             {
                 SceneRayQuery < 0 > rayQuery;
                 dist *= kRayEpsilon;
-                const Ray ray = Ray(biasSurface.posW, ls.dir, 0.0f, dist);
+                const RayDesc ray = { biasSurface.posW, 0.0f, ls.dir, dist };
                 if (!rayQuery.traceVisibilityRay(ray, RAY_FLAG_CULL_NON_OPAQUE, 0xff))
                 {
                     ps = 0.0f;

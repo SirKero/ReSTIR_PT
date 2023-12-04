@@ -390,7 +390,7 @@ void spatiotemporalResampling(uint2 pixel, inout Reservoir r, inout FGData fgSam
         int2 idx = prevIdx + offset;
 
         //Clamp to edge
-        min(max(uint2(0), idx), gFrameDim - 1);
+        idx = clamp(idx, uint2(0), gFrameDim - 1);
         
         //Get Hit sample from last frame
         SurfaceFG temporalSurface = getSurface(idx, true);

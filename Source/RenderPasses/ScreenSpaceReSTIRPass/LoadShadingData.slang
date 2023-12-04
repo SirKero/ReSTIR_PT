@@ -39,9 +39,8 @@ bool loadShadingData(uint2 pixel, uint2 frameDim, const Camera camera, Texture2D
         sd = prepareShadingData(v, materialID, gScene.materials[materialID], gScene.materialResources[materialID], -rayDir, 0.f);
 
         // Adjust shading normals if GBuffer pass has flag enabled.
-#if GBUFFER_ADJUST_SHADING_NORMALS
         adjustShadingNormal(sd, v);
-#endif
+
         valid = true;
     }
 

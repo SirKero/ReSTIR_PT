@@ -170,6 +170,8 @@ void ReSTIR_GI::execute(RenderContext* pRenderContext, const RenderData& renderD
 
     copyViewTexture(pRenderContext, renderData);
 
+    copyReSTIRTexture(pRenderContext, renderData);
+
     //if (mpRTXDI) mpRTXDI->endFrame(pRenderContext);
 
     mReservoirValid = true;
@@ -681,6 +683,7 @@ void ReSTIR_GI::finalShadingPass(RenderContext* pRenderContext, const RenderData
 
 void ReSTIR_GI::copyViewTexture(RenderContext* pRenderContext, const RenderData& renderData)
 {
+    PROFILE("CopyView");
     if (mpViewDir != nullptr)
     {
         pRenderContext->copyResource(mpViewDirPrev.get(), mpViewDir.get());
