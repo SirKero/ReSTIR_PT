@@ -180,6 +180,19 @@ void anyHit(inout RayData rayData : SV_RayPayload, SphereAttribs attribs : SV_In
     //Get Photon data
     PhotonData pd = PhotonData(gPackedPhotonData[InstanceIndex()][primIndex]);
 
+    //Check if first hit check is required
+    if((rayData.counter >> 24 & 1) != 0)
+    {
+        if(!pd.isFirstHit)
+            return;
+    }
+
+     //Check for different surfaces
+    if (dot(pd.normal,  WorldRayDirection()) < 0.6)
+    {
+        return;
+    }
+    
     //Check if photon sample is in valid hemisphere
     if (dot(pd.dir, WorldRayDirection()) <= 0) 
     {
@@ -213,8 +226,15 @@ void anyHit(inout RayData rayData : SV_RayPayload, SphereAttribs attribs : SV_In
     const HitInfo hit = HitInfo(rayData.packedHitInfo);
     //World Direction is set to the viewDir we get from the vBuffer
     ShadingData sd = loadShadingData(hit, WorldRayDirection());
+
+    //Check if first hit check is required
+    if((rayData.countPhotons >> 24 & 1) != 0)
+    {
+        if(!pd.isFirstHit)
+            return;
+    }
+        
     //Check for different surfaces
-    
     if (dot(pd.normal, sd.faceN) < 0.6)
     {
         return;
@@ -326,7 +346,9 @@ void rayGen()
     
     bool valid = hit.isValid(); //Check if the ray is valid
 
-    float3 view = -gView[launchIndex].xyz;
+    float4 viewTmp =gView[launchIndex];
+    float3 view = -viewTmp.xyz;
+    bool collectDirect = viewTmp.w == 0;
     #if MODE_FINAL_GATHER || USE_STOCHASTIC_COLLECT
     ShadingData fgSD = {};
     if(valid){
@@ -366,7 +388,29 @@ void rayGen()
         #endif // CAUSTIC_COLLECTION_MODE == CAUSTIC_COLLECT_MODE_GREATERONE
             causticRadiance += w * rayData.radiance;
     #endif // USE_STOCHASTIC_COLLECT
-   
+
+        
+        //Collect the direct light on some metal surfaces
+        if(collectDirect){
+        //Clear
+        #if USE_STOCHASTIC_COLLECT
+            rayData = RayData();    //Reset Payload
+            rayData.counter += 1 << 24; //Flag that only the first hit should be collected
+        #else
+            rayData.radiance = float3(0);
+            rayData.countPhotons += 1 << 24; //Flag that only the first hit should be collected
+        #endif
+            TraceRay(gPhotonAS, rayFlags, 1 /* instanceInclusionMask */, 0 /* hitIdx */, 0 /* rayType count */, 0 /* missIdx */, ray, rayData);
+            float w = 1 / (M_PI * gPhotonRadius.x * gPhotonRadius.x);
+        #if USE_STOCHASTIC_COLLECT
+                rayData.counter &= 0xFFFFFF;    //Delete flag
+                //Load shading data and materialInstance
+                causticRadiance += w * stochPhotonContribution(fgSD, rayData, false);
+        #else // USE_STOCHASTIC_COLLECT
+                rayData.countPhotons = 0; //delete flag
+                causticRadiance += w * rayData.radiance;
+        #endif // USE_STOCHASTIC_COLLECT
+        }
     }
      //Temporal Caustic Filter
     #if (CAUSTIC_COLLECTION_MODE == CAUSTIC_COLLECT_MODE_TEMPORAL)

@@ -43,6 +43,7 @@ Texture2D<float4> gCausticRadiance;
 Texture2D<float4> gThp;
 RWTexture2D<float4> gOutColor;
 RWTexture2D<float4> gOutEmission;
+RWTexture2D<float4> gOutViewPrev;   //Copy of viewPrev for next frame
 
 #define is_valid(name) (is_valid_##name != 0)
 
@@ -106,6 +107,11 @@ void main(uint2 pixel : SV_DispatchThreadID)
     float3 viewDir = -gView[pixel].xyz;
     PackedHitInfo packedHitInfo = gVBuffer[pixel];
     HitInfo hitInfo = HitInfo(packedHitInfo);
+
+#if USE_RESTIRFG
+    gOutViewPrev[pixel] = float4(-viewDir,1.f);
+#endif
+    
     if (hitInfo.isValid())
     {
         float3 thp = gThp[pixel].xyz;

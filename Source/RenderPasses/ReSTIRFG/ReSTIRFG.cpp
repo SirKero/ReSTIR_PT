@@ -39,7 +39,6 @@ namespace
     const std::string kCollectPhotonsShader = "RenderPasses/ReSTIRFG/CollectPhotons.rt.slang";
     const std::string kResamplingPassShader = "RenderPasses/ReSTIRFG/ResamplingPass.cs.slang";
     const std::string kFinalShadingPassShader = "RenderPasses/ReSTIRFG/FinalShading.cs.slang";
-    const std::string kCopyReSTIRResourcesShader = "RenderPasses/ReSTIRFG/CopyReSTIRResources.cs.slang";
 
     const std::string kShaderModel = "6_5";
     const uint kMaxPayloadBytes = 96u;
@@ -194,10 +193,6 @@ void ReSTIRFG::execute(RenderContext* pRenderContext, const RenderData& renderDa
     {
         finalShadingPass(pRenderContext, renderData);
     }
-
-    copyViewTexture(pRenderContext, renderData);
-
-    copyReSTIRTexture(pRenderContext, renderData);
 
     //SPPM
     if (mUseSPPM)
@@ -690,6 +685,11 @@ void ReSTIRFG::traceTransmissiveDelta(RenderContext* pRenderContext, const Rende
     var["gOutRayDist"] = mpRayDist;
     var["gOutVBuffer"] = mpVBuffer;
 
+    var["gOutThpReSTIR"] = renderData[kOutputThp]->asTexture();
+    var["gOutViewDirReSTIR"] = renderData[kOutputView]->asTexture();
+    var["gOutViewDirReSTIRPrev"] = renderData[kOutputPrevView]->asTexture();
+    var["gOutVBufferReSTIR"] = renderData[kOutputVBuffer]->asTexture();
+
     // Create dimensions based on the number of VPLs
     assert(mScreenRes.x > 0 && mScreenRes.y > 0);
 
@@ -758,7 +758,6 @@ void ReSTIRFG::getFinalGatherHitPass(RenderContext* pRenderContext, const Render
 void ReSTIRFG::generatePhotonsPass(RenderContext* pRenderContext, const RenderData& renderData, bool clearBuffers) {
     PROFILE("PhotonGeneration");
 
-    //TODO Clear via Compute pass?
     pRenderContext->clearUAV(mpPhotonCounter->getUAV().get(), uint4(0));
     pRenderContext->clearUAV(mpPhotonAABB[0]->getUAV().get(), uint4(0));
     pRenderContext->clearUAV(mpPhotonAABB[1]->getUAV().get(), uint4(0));
@@ -1106,6 +1105,7 @@ void ReSTIRFG::finalShadingPass(RenderContext* pRenderContext, const RenderData&
 
     var["gThp"] = mpThp;
     var["gView"] = mpViewDir;
+    var["gOutViewPrev"] = mpViewDirPrev;
     var["gVBuffer"] = mpVBuffer;
     var["gMVec"] = renderData[kInputMotionVectors]->asTexture();
 
@@ -1132,56 +1132,6 @@ void ReSTIRFG::finalShadingPass(RenderContext* pRenderContext, const RenderData&
     const uint2 targetDim = renderData.getDefaultTextureDims();
     assert(targetDim.x > 0 && targetDim.y > 0);
     mpFinalShadingPass->execute(pRenderContext, uint3(targetDim, 1));
-}
-
-void ReSTIRFG::copyViewTexture(RenderContext* pRenderContext, const RenderData& renderData) {
-    PROFILE("CopyView");
-    if (mpViewDir != nullptr)
-    {
-        pRenderContext->copyResource(mpViewDirPrev.get(), mpViewDir.get());
-    }
-}
-
-
-void ReSTIRFG::copyReSTIRTexture(RenderContext* pRenderContext, const RenderData& renderData)
-{
-    PROFILE("CopyReSTIRTextures");
-    // Create pass
-    if (!mpCopyReSTIRResourcesPass)
-    {
-        Program::Desc desc;
-        //desc.addShaderModules(mpScene->getShaderModules());
-        desc.addShaderLibrary(kCopyReSTIRResourcesShader).csEntry("main").setShaderModel(kShaderModel);
-        //desc.addTypeConformances(mpScene->getTypeConformances());
-
-        Program::DefineList defines;
-        defines.add(mpScene->getSceneDefines());
-        defines.add(getValidResourceDefines(kOutputChannels, renderData));
-
-        mpCopyReSTIRResourcesPass = ComputePass::create(desc, defines, true);
-    }
-    assert(mpCopyReSTIRResourcesPass);
-
-    mpCopyReSTIRResourcesPass->getProgram()->addDefines(getValidResourceDefines(kOutputChannels, renderData));
-
-    // Set variables
-    auto var = mpCopyReSTIRResourcesPass->getRootVar();
-
-    mpScene->setRaytracingShaderData(pRenderContext, var, 1); // Set scene data
-    
-    var["gThpOut"] = renderData[kOutputThp]->asTexture();
-    var["gViewOut"] = renderData[kOutputView]->asTexture();
-    var["gPrevViewOut"] = renderData[kOutputPrevView]->asTexture();
-    var["gVBufferOut"] = renderData[kOutputVBuffer]->asTexture();
-
-    var["gThpIn"] = mpThp;
-    var["gViewIn"] = mpViewDir;
-    var["gPrevViewIn"] = mpViewDir;
-    var["gVBufferIn"] = mpVBuffer;
-    // Execute
-    const uint2 targetDim = renderData.getDefaultTextureDims();
-    assert(targetDim.x > 0 && targetDim.y > 0);
-    mpCopyReSTIRResourcesPass->execute(pRenderContext, uint3(targetDim, 1));
 }
 
 void ReSTIRFG::computeQuadTexSize(uint maxItems, uint& outWidth, uint& outHeight) {

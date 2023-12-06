@@ -24,8 +24,8 @@ RWTexture2D<PackedHitInfo> gVBufferOut;
 [numthreads(16, 16, 1)]
 void main(uint2 pixel : SV_DispatchThreadID)
 {
-    if(is_valid(gThpOut)) gThpOut[pixel] = gThpIn[pixel];
-    if(is_valid(gViewOut)) gViewOut[pixel] = gViewIn[pixel];
-    if(is_valid(gPrevViewOut)) gPrevViewOut[pixel] = gPrevViewIn[pixel];
-    if(is_valid(gVBufferOut)) gVBufferOut[pixel] = gVBufferIn[pixel];
+    //if(is_valid(gThpOut)) gThpOut[pixel] = gThpIn[pixel];
+    //if(is_valid(gViewOut)) gViewOut[pixel] = gViewIn[pixel];
+    //if(is_valid(gPrevViewOut)) gPrevViewOut[pixel] = gPrevViewIn[pixel];
+    //if(is_valid(gVBufferOut)) gVBufferOut[pixel] = gVBufferIn[pixel];
 }

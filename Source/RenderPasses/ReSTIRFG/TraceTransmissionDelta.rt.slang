@@ -35,6 +35,11 @@ RWTexture2D<float4> gOutViewDir;
 RWTexture2D<float> gOutRayDist;
 RWTexture2D<float4> gOutThp;
 
+RWTexture2D<PackedHitInfo> gOutVBufferReSTIR;
+RWTexture2D<float4> gOutViewDirReSTIR;
+RWTexture2D<float4> gOutViewDirReSTIRPrev;
+RWTexture2D<float4> gOutThpReSTIR;
+
 #define is_valid(name) (is_valid_##name != 0)
 
 static const float kDemodulateMinReflectance = 0.01f;
@@ -117,6 +122,12 @@ void rayGen()
     float3 viewDir = -gScene.camera.computeRayPinhole(launchIndex, launchDim).dir;
     float rayDist = 0.f;
     float3 thp = float3(1);
+
+    HitInfo reStirHitInfo = hitInfo;
+    float3 reStirViewDir =  viewDir;
+    float3 thpReSTIR = thp;
+    bool validSurfaceForReStir = true;
+    
     TraceData traceData = TraceData::create();
     traceData.sg = SampleGenerator(launchIndex, gFrameCount + 7 * 13);
     float3 originPos = gScene.camera.getPosition();  //For ray dist
@@ -152,6 +163,7 @@ void rayGen()
         float meanDiffuseProb = (diffuseProb.x + diffuseProb.y + diffuseProb.z) / 3;
         bool hasDiffuseParts = gRequDiffParts ? (meanDiffuseProb > kDiffuseCutoff) || sd.linearRoughness > kRoughnessCutoff : true;
         //bool isDiffuse = bsdfSample.isLobe(LobeType::Diffuse) && !isTransmission;
+        bool isNonDelta = bsdfSample.isLobe(LobeType::NonDeltaReflection);
         bool isDiffuse = bsdfSample.isLobe(LobeType::NonDeltaReflection) && hasDiffuseParts;
 
         if(isDiffuse)
@@ -163,24 +175,41 @@ void rayGen()
         tRay.Origin = sd.computeNewRayOrigin(!isTransmission);
         tRay.TMin = 0.0001f;
         tRay.TMax = 10000.f;
-        tRay.Direction = bsdfSample.wi; //TODO sign
+        tRay.Direction = bsdfSample.wi;
 
         TraceRay(gScene.rtAccel, 0, 0xff /* instanceInclusionMask */, 0 /* hitIdx */, rayTypeCount, 0 /* missIdx */, tRay, traceData);
 
         //Update info
         hitInfo = HitInfo(traceData.packedHitInfo);
-        viewDir = -bsdfSample.wi;   //TODO sign
+        viewDir = -bsdfSample.wi;  
         originPos = sd.posW;
+
+        //Write ReSTIR hits only for transmission or delta reflection hits
+        if(validSurfaceForReStir){
+            if(isTransmission || bsdfSample.isLobe(LobeType::DeltaReflection)){
+                reStirHitInfo = hitInfo;
+                reStirViewDir = viewDir;
+                thpReSTIR = thp;
+            }else{
+                validSurfaceForReStir = false;
+            }
+        }
+        
     }
-
-
+    
+    //Write ReSTIR Buffer
+    gOutVBufferReSTIR[launchIndex] = reStirHitInfo.pack();
+    gOutViewDirReSTIRPrev[launchIndex] = gOutViewDirReSTIR[launchIndex];
+    gOutViewDirReSTIR[launchIndex] = float4(reStirViewDir, 1);
+    
     //Write
     gOutVBuffer[launchIndex] = hitInfo.pack();
-    gOutViewDir[launchIndex] = float4(viewDir, 1);
+    gOutViewDir[launchIndex] = float4(viewDir, validSurfaceForReStir ? 1 : 0);
     gOutRayDist[launchIndex] = rayDist;
 
     if(any(isnan(thp)) || any(isinf(thp)))
         return;
     
     gOutThp[launchIndex] = float4(thp, 1);
+    gOutThpReSTIR[launchIndex] = float4(thpReSTIR, 1);
 }

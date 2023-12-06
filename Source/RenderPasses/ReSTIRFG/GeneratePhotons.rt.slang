@@ -276,7 +276,7 @@ void closestHit(inout RayData rayData : SV_RayPayload, BuiltInTriangleIntersecti
     float3 rayOrigin = sd.computeNewRayOrigin(!transmission); //false is for transmissions
     rayData.origin = rayOrigin;
     rayData.thp *= valid ? bsdfSample.weight: float3(0);
-    rayData.packedNormal = encodeNormal2x16(sd.faceN);
+    rayData.packedNormal = encodeNormal2x8(sd.faceN);
     rayData.direction = bsdfSample.wi;
     rayData.isEmissive = luminance(sd.emissive) > 0;
     if (gFlags & (uint) GenerationFlags::DeltaRejection)
@@ -407,6 +407,7 @@ void rayGen()
                     pd.flux = photon.flux;
                     pd.dir = -photon.dir;
                     pd.packedNormal = rayData.packedNormal;
+                    pd.isFirstHit = i == 0 ? true : false;
                 
                     gPackedPhotonData[photonType][photonIndex] = pd.pack();
                 } 
