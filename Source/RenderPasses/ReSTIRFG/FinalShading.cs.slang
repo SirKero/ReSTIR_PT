@@ -104,7 +104,9 @@ void main(uint2 pixel : SV_DispatchThreadID)
 
     //Get shading data
     //Get view buffer
-    float3 viewDir = -gView[pixel].xyz;
+    float4 viewTmp = gView[pixel];
+    float3 viewDir = -viewTmp.xyz;
+    bool needEmissive = viewTmp.w == 0;
     PackedHitInfo packedHitInfo = gVBuffer[pixel];
     HitInfo hitInfo = HitInfo(packedHitInfo);
 
@@ -120,6 +122,7 @@ void main(uint2 pixel : SV_DispatchThreadID)
         //Get Material properties
         ShadingData sd = loadShadingData(hitInfo, viewDir);   
 
+        
         // Variables for RTXDI and ReSTIRFG
         float3 diffuse = { };
         float3 specular = { };
@@ -198,8 +201,10 @@ void main(uint2 pixel : SV_DispatchThreadID)
     #endif
 
         //Emission is added in ReSTIR pass
-        //emission += sd.emissive; //Emission
-        //color += emission; //Do this or demodulate it?
+        if(needEmissive)
+            emission += sd.emissive* thp; //Emission
+
+        color += emission; //Do this or demodulate it?
     }
     else
     {
