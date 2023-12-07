@@ -184,12 +184,11 @@ void ReSTIRFG::execute(RenderContext* pRenderContext, const RenderData& renderDa
 
     collectPhotons(pRenderContext, renderData);
 
-    
     //Do resampling
     if (mReservoirValid && (mRenderMode == RenderMode::ReSTIRFG))
         resamplingPass(pRenderContext, renderData);
 
-    if ((mRenderMode == RenderMode::ReSTIRFG) || mDirectLightMode == DirectLightingMode::RTXDI)
+    if (mRenderMode == RenderMode::ReSTIRFG)
     {
         finalShadingPass(pRenderContext, renderData);
     }
@@ -220,7 +219,8 @@ void ReSTIRFG::renderUI(Gui::Widgets& widget)
 
     widget.dropdown("Direct Light Mode", kDirectLightRenderModeList, (uint&)mDirectLightMode);
 
-    widget.dropdown("(Indirect) Render Mode", kRenderModeList, (uint&)mRenderMode);
+    if (widget.dropdown("(Indirect) Render Mode", kRenderModeList, (uint&)mRenderMode))
+        mClearReservoir |= true;
 
     if (auto group = widget.group("Specular Trace Options"))
     {
@@ -950,6 +950,7 @@ void ReSTIRFG::collectPhotons(RenderContext* pRenderContext, const RenderData& r
 
     var["gVBuffer"] = mpVBuffer;
     var["gView"] = mpViewDir;
+    var["gThp"] = mpThp;
 
     if (finalGatherRenderMode)
         var["gColor"] = renderData[kOutputColor]->asTexture();

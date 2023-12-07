@@ -199,12 +199,6 @@ void main(uint2 pixel : SV_DispatchThreadID)
             float3 fgRadiance = gOutColor[pixel].xyz;
             color += fgRadiance * thp;
     #endif
-
-        //Emission is added in ReSTIR pass
-        if(needEmissive)
-            emission += sd.emissive* thp; //Emission
-
-        color += emission; //Do this or demodulate it?
     }
     else
     {

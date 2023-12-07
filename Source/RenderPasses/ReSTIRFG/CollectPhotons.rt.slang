@@ -66,6 +66,7 @@ Texture2D<float4> gView;
 Texture2D<PackedHitInfo> gFinalGatherHit;
 StructuredBuffer<AABB> gPhotonAABB[2];
 StructuredBuffer<uint4> gPackedPhotonData[2];
+Texture2D<float4> gThp; //Only used for final gather
 
 //Inputs Temporal Caustic Filter (can be null)
 Texture2D<float2> gMVec;
@@ -349,12 +350,11 @@ void rayGen()
     float4 viewTmp =gView[launchIndex];
     float3 view = -viewTmp.xyz;
     bool collectDirect = viewTmp.w == 0;
-    #if MODE_FINAL_GATHER || USE_STOCHASTIC_COLLECT
+    
     ShadingData fgSD = {};
     if(valid){
         fgSD = loadShadingData(hit, view); 
     }
-    #endif
 
     RayDesc ray;
     uint rayFlags = RAY_FLAG_SKIP_CLOSEST_HIT_SHADER | RAY_FLAG_SKIP_TRIANGLES;
@@ -406,10 +406,12 @@ void rayGen()
                 rayData.counter &= 0xFFFFFF;    //Delete flag
                 //Load shading data and materialInstance
                 causticRadiance += w * stochPhotonContribution(fgSD, rayData, false);
+                
         #else // USE_STOCHASTIC_COLLECT
                 rayData.countPhotons = 0; //delete flag
                 causticRadiance += w * rayData.radiance;
         #endif // USE_STOCHASTIC_COLLECT
+            causticRadiance += fgSD.emissive; //Add emissive to caustic to filter
         }
     }
      //Temporal Caustic Filter
@@ -548,10 +550,13 @@ void rayGen()
     }
 
     color += causticRadiance;
+
+    float3 thp = gThp[launchIndex].xyz;
+    color *= thp;
     
     if(any(isnan(color)) || any(isinf(color)))
         return;
-    
+        
     gColor[launchIndex] = float4(color, 1.f);
 
 #else
