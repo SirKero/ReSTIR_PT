@@ -187,6 +187,8 @@ void AccumulatePass::execute(RenderContext* pRenderContext, const RenderData& re
     Texture::SharedPtr pDst = renderData[kOutputChannel]->asTexture();
     assert(pSrc && pDst);
 
+   
+
     const uint2 resolution = uint2(pSrc->getWidth(), pSrc->getHeight());
     const bool resolutionMatch = pDst->getWidth() == resolution.x && pDst->getHeight() == resolution.y;
 
@@ -205,6 +207,15 @@ void AccumulatePass::execute(RenderContext* pRenderContext, const RenderData& re
     {
         logError("AccumulatePass I/O sizes don't match. The pass will be disabled.", Logger::MsgBox::ContinueAbort, false);
         mEnabled = false;
+    }
+
+    //Create copy tex
+    if (mpTexCopy)
+        if ((mpTexCopy->getHeight() != pDst->getHeight()) || (mpTexCopy->getWidth() != pDst->getWidth()))
+            mpTexCopy.reset();
+    if (!mpTexCopy) {
+        mpTexCopy = Texture::create2D(pDst->getWidth(), pDst->getHeight(), pDst->getFormat(), 1u, 1u, nullptr, ResourceBindFlags::ShaderResource | ResourceBindFlags::RenderTarget);
+        mpTexCopy->setName("Accumulate:CopyTex");
     }
 
     // Decide action based on current configuration:
@@ -234,6 +245,12 @@ void AccumulatePass::accumulate(RenderContext* pRenderContext, const Texture::Sh
     assert(pSrc->getWidth() == mFrameDim.x && pSrc->getHeight() == mFrameDim.y);
     assert(pDst->getWidth() == mFrameDim.x && pDst->getHeight() == mFrameDim.y);
     const FormatType srcType = getFormatType(pSrc->getFormat());
+
+    //Copy to dst tex
+    if (mAccumFrameCount >= mMaxAccumulatedFrames && mMaxAccumulatedFrames != 0) {
+        pRenderContext->blit(mpTexCopy->getSRV(), pDst->getRTV());
+        return;
+    }
 
     // If for the first time, or if the input format type has changed, (re)compile the programs.
     if (mpProgram.empty() || srcType != mSrcType)
@@ -296,6 +313,11 @@ void AccumulatePass::accumulate(RenderContext* pRenderContext, const Texture::Sh
 
     if (mFrameCount % mAccumInterval == 0)
         pRenderContext->dispatch(mpState.get(), mpVars.get(), numGroups);
+
+    //Copy to copy tex
+    if (mAccumFrameCount == mMaxAccumulatedFrames) {
+        pRenderContext->blit(pDst->getSRV(), mpTexCopy->getRTV());
+    }
 }
 
 void AccumulatePass::renderUI(Gui::Widgets& widget)

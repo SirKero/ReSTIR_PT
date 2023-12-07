@@ -91,6 +91,7 @@ protected:
     Texture::SharedPtr          mpLastFrameCorr;                ///< Last frame running compensation term. Used in SingleKahan mode.
     Texture::SharedPtr          mpLastFrameSumLo;               ///< Last frame running sum (lo bits). Used in Double mode.
     Texture::SharedPtr          mpLastFrameSumHi;               ///< Last frame running sum (hi bits). Used in Double mode.
+    Texture::SharedPtr          mpTexCopy;                      ///< Copy of the texture if the accumulate should stop
 
     // UI variables
     bool                        mEnabled = true;                ///< True if accumulation is enabled.
