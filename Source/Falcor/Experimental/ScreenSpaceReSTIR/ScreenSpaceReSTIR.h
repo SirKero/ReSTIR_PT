@@ -143,8 +143,8 @@ namespace Falcor
             // Spatial resampling options.
             bool useSpatialResampling = true;           ///< Enable spatial resampling.
             uint32_t spatialIterations = 1;             ///< Number of spatial resampling iterations.
-            uint32_t spatialNeighborCount = 5;          ///< Number of neighbor samples to resample per pixel and iteration.
-            uint32_t spatialGatherRadius = 30;          ///< Radius to gather samples from.
+            uint32_t spatialNeighborCount = 2;          ///< Number of neighbor samples to resample per pixel and iteration.
+            uint32_t spatialGatherRadius = 20;          ///< Radius to gather samples from.
 
             // General options.
             bool usePairwiseMIS = true;                 ///< Use pairwise MIS when combining samples.
