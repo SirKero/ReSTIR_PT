@@ -180,7 +180,7 @@ void anyHit(inout RayData rayData : SV_RayPayload, SphereAttribs attribs : SV_In
 
     //Get Photon data
     PhotonData pd = PhotonData(gPackedPhotonData[InstanceIndex()][primIndex]);
-
+    
     //Check if first hit check is required
     if((rayData.counter >> 24 & 1) != 0)
     {
@@ -199,15 +199,18 @@ void anyHit(inout RayData rayData : SV_RayPayload, SphereAttribs attribs : SV_In
     {
         return;
     }
-        
-    uint idx = rayData.counter;
+
+    uint usableCounter = rayData.counter & 0XFFFFFF;
+    
+    uint idx = usableCounter;
+    usableCounter++;
     rayData.counter++;
 
     //Reservoir sampling
     //If photon list is full we get a random index between 0 and number of elements (rayData.counter) to stochastically insert
     if (idx >= STOCH_NUM_PHOTONS)
     {
-        idx = uint(sampleNext1D(rayData.sg) * rayData.counter);
+        idx = uint(sampleNext1D(rayData.sg) * usableCounter);
     }
     //Insert if index is within maximum list size
     if (idx < STOCH_NUM_PHOTONS)

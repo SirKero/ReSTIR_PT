@@ -146,7 +146,7 @@ void rayGen()
         float3 sum = (sd.diffuse + sd.specular);
         float3 diffuseProb;
         for (uint i = 0; i < 3;i++)
-            diffuseProb[i] = sum[i] > 0 ? sd.diffuse[i]/sum[i] : 1.f;
+            diffuseProb[i] = sum[i] > 0 ? sd.diffuse[i]/sum[i] : 0.f;
         float meanDiffuseProb = (diffuseProb.x + diffuseProb.y + diffuseProb.z) / 3;
         bool hasDiffuseParts = gRequDiffParts ? (meanDiffuseProb > kDiffuseCutoff) || sd.linearRoughness > kRoughnessCutoff : true;
         //bool isDiffuse = bsdfSample.isLobe(LobeType::Diffuse) && !isTransmission;
