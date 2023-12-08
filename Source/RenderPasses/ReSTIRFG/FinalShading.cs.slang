@@ -190,14 +190,12 @@ void main(uint2 pixel : SV_DispatchThreadID)
             hitT += distance;
             hitT *= 1.f / hitTSamples;
         }
-        diffuse += gCausticRadiance[pixel].xyz;
+        
         color += diffuse * thp; //Add diffuse and specular parts together
-    #endif
-                
-        //If only RTXDI is used, add the previous calculated light color
-    #if !USE_RESTIRFG
-            float3 fgRadiance = gOutColor[pixel].xyz;
-            color += fgRadiance * thp;
+        float3 caustic = gCausticRadiance[pixel].xyz;
+        diffuse += caustic;
+        color += caustic;
+        
     #endif
     }
     else
