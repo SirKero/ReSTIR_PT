@@ -152,7 +152,7 @@ private:
     float mTraceDiffuseCutoff = 0.3f;    //If diffuse part is requred, it only counts as diffuse if any channel is over this value
 
     //Defines GI
-    uint mGIMaxBounces = 3; // Max Bounces for GI
+    uint mGIMaxBounces = 10; // Max Bounces for GI
     bool mAlphaTest = true;
     bool mGINEE = true;                 //Next event estimation in GI
     bool mGIMIS = true;                 //Use Multiple Importance Sampling
@@ -172,7 +172,7 @@ private:
     float mNormalThreshold = 0.6f;                   // Cosine of maximum angle between both normals allowed
     float2 mJacobianMinMax = float2(1 / 10.f, 10.f); // Min and Max values that are allowed for the jacobian determinant (Angle/dist too
                                                      // different if lower/higher)
-    BiasCorrectionMode mBiasCorrectionMode = BiasCorrectionMode::Basic; // Bias Correction Mode
+    BiasCorrectionMode mBiasCorrectionMode = BiasCorrectionMode::RayTraced; // Bias Correction Mode
 
     //
     // Buffer and Textures
