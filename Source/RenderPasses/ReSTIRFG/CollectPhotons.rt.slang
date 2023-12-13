@@ -70,8 +70,8 @@ Texture2D<float4> gThp; //Used for caustic radiance (filter) and final gather
 
 //Inputs Temporal Caustic Filter (can be null)
 Texture2D<float2> gMVec;
-StructuredBuffer<PackedSurfaceDataFG> gSurface;
-StructuredBuffer<PackedSurfaceDataFG>gSurfacePrev;
+Texture2D<uint2> gCausticSurface;
+Texture2D<uint2> gCausticSurfacePrev;
 Texture2D<float4> gCausticPrev;
 
 // Outputs
@@ -153,15 +153,15 @@ uint index2Dto1D(uint2 idx, uint width)
     return idx.x + width * idx.y;
 }
 
-SurfaceFG getSurface(uint2 idx, bool prev, uint frameWidth, float3 view)
+CausticSurface getSurface(uint2 idx, bool prev)
 {
-    PackedSurfaceDataFG surfaceData;
+    uint2 surfaceData;
     if (prev)
-        surfaceData = gSurfacePrev[index2Dto1D(idx, frameWidth)];
+        surfaceData = gCausticSurfacePrev[idx];
     else
-        surfaceData = gSurface[index2Dto1D(idx, frameWidth)];
-
-    return SurfaceFG(surfaceData, view);  
+        surfaceData = gCausticSurface[idx];
+    
+    return CausticSurface(surfaceData);  
 }
 
 [shader("miss")]
@@ -433,15 +433,16 @@ void rayGen()
     if (tempIndex.x >= 0 && tempIndex.y >= 0 && tempIndex.x < launchDim.x && tempIndex.y < launchDim.y)
     {
         //Load Surfaces
-        SurfaceFG currentSurface = getSurface(launchIndex, false, launchDim.x, view);
-        SurfaceFG prevSurface = getSurface(tempIndex, false, launchDim.x, view);
+        CausticSurface currentSurface = getSurface(launchIndex, false);
+        CausticSurface prevSurface = getSurface(tempIndex, true);
 
-        if (currentSurface.isValidNeighbor(prevSurface, gDepthThreshold, gNormalThreshold, gMatThreshold))
+        if (currentSurface.isValidNeighbor(prevSurface, gDepthThreshold, gNormalThreshold))
         {
             //Because the caustic image can be RGBA16F, we need to store the history as float. As values are in a low range this should not introduce any errors
             float4 prev = gCausticPrev[tempIndex];
-            history = min(gTemporalFilterHistoryLimit, uint(round(prev.w)) + history);
-            prev.xyz *= max(0, (history - 1));
+            uint limit = currentSurface.isDelta ? gTemporalFilterHistoryLimit/2 : gTemporalFilterHistoryLimit;  //Make reflections more reactive as the reprojection is often wrong
+            history = min(limit, uint(round(prev.w)) + history);
+            prev.xyz *= max(1, (history - 1));
             causticRadiance += prev.xyz;
             causticRadiance /= max(1u, history);
         }

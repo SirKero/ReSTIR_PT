@@ -489,6 +489,7 @@ void ReSTIRFG::prepareBuffers(RenderContext* pRenderContext, const RenderData& r
             mpFGSampelDataBuffer[i].reset();
             mpSurfaceBuffer[i].reset();
             mpCausticRadiance[i].reset();
+            mpTemporalCausticSurface[i].reset();
         }
         mpFinalGatherSampleHitData.reset();
         mpVBuffer.reset();
@@ -559,10 +560,24 @@ void ReSTIRFG::prepareBuffers(RenderContext* pRenderContext, const RenderData& r
             ResourceBindFlags::ShaderResource | ResourceBindFlags::UnorderedAccess
         );
         mpCausticRadiance[1]->setName("ReSTIR_FG::CausticRadianceTemporal");
+
+        for (uint j = 0; j < 2; j++)
+        {
+            mpTemporalCausticSurface[j] = Texture::create2D(
+                mScreenRes.x, mScreenRes.y, ResourceFormat::RG32Uint, 1u, 1u, nullptr,
+                ResourceBindFlags::ShaderResource | ResourceBindFlags::UnorderedAccess
+            );
+            mpTemporalCausticSurface[j]->setName("ReSTIR_FG::CausticSurfaceTemporal " + std::to_string(j));
+        }
     }
 
     if (mpCausticRadiance[1] && (mCausticCollectMode != CausticCollectionMode::Temporal))
+    {
         mpCausticRadiance[1].reset();
+        for (uint j = 0; j < 2; j++)
+            mpTemporalCausticSurface[j].reset();
+    }
+        
            
     if (!mpVBuffer)
     {
@@ -664,6 +679,9 @@ void ReSTIRFG::traceTransmissiveDelta(RenderContext* pRenderContext, const Rende
     mTraceTransmissionDelta.pProgram->addDefines(getValidResourceDefines(kOutputChannels, renderData));
     mTraceTransmissionDelta.pProgram->addDefine("TRACE_TRANS_SPEC_ROUGH_CUTOFF", std::to_string(mTraceRoughnessCutoff));
     mTraceTransmissionDelta.pProgram->addDefine("TRACE_TRANS_SPEC_DIFFUSEPART_CUTOFF", std::to_string(mTraceDiffuseCutoff));
+    mTraceTransmissionDelta.pProgram->addDefine(
+        "CAUSTIC_TEMPORAL_FILTER_ENABLED", mCausticCollectMode == CausticCollectionMode::Temporal ? "1" : "0"
+    );
 
     if (!mTraceTransmissionDelta.pVars)
         mTraceTransmissionDelta.initProgramVars(mpScene, mpSampleGenerator);
@@ -684,6 +702,7 @@ void ReSTIRFG::traceTransmissiveDelta(RenderContext* pRenderContext, const Rende
     var["gOutViewDir"] = mpViewDir;
     var["gOutRayDist"] = mpRayDist;
     var["gOutVBuffer"] = mpVBuffer;
+    var["gPackedCausticSurface"] = mpTemporalCausticSurface[mFrameCount % 2];
 
     var["gOutThpReSTIR"] = renderData[kOutputThp]->asTexture();
     var["gOutViewDirReSTIR"] = renderData[kOutputView]->asTexture();
@@ -931,8 +950,8 @@ void ReSTIRFG::collectPhotons(RenderContext* pRenderContext, const RenderData& r
 
         var["gMVec"] = renderData[kInputMotionVectors]->asTexture();
 
-        var["gSurface"] = mpSurfaceBuffer[idxCurr];
-        var["gSurfacePrev"] = mpSurfaceBuffer[idxPrev];
+        var["gCausticSurface"] = mpTemporalCausticSurface[idxCurr];
+        var["gCausticSurfacePrev"] = mpTemporalCausticSurface[idxPrev];
 
         var["gCausticPrev"] = mpCausticRadiance[idxPrev];
         var["gCausticOut"] = mpCausticRadiance[idxCurr];

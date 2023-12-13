@@ -16,7 +16,7 @@ import Utils.Math.PackedFormats;
 import Utils.Math.FormatConversion;
 //import Rendering.Materials.IsotropicGGX;
 import Utils.Color.ColorHelpers;
-
+import SurfaceDataFG;
 
 cbuffer PerFrame
 {
@@ -34,6 +34,7 @@ RWTexture2D<PackedHitInfo> gOutVBuffer;
 RWTexture2D<float4> gOutViewDir;
 RWTexture2D<float> gOutRayDist;
 RWTexture2D<float4> gOutThp;
+RWTexture2D<uint2> gPackedCausticSurface;
 
 RWTexture2D<PackedHitInfo> gOutVBufferReSTIR;
 RWTexture2D<float4> gOutViewDirReSTIR;
@@ -45,6 +46,7 @@ RWTexture2D<float4> gOutThpReSTIR;
 static const float kDemodulateMinReflectance = 0.01f;
 static const float kRoughnessCutoff = TRACE_TRANS_SPEC_ROUGH_CUTOFF;
 static const float kDiffuseCutoff = TRACE_TRANS_SPEC_DIFFUSEPART_CUTOFF;
+static const bool kTemporalFilterEnabled = CAUSTIC_TEMPORAL_FILTER_ENABLED;
 
 struct TraceData
 {
@@ -131,6 +133,7 @@ void rayGen()
     TraceData traceData = TraceData::create();
     traceData.sg = SampleGenerator(launchIndex, gFrameCount + 7 * 13);
     float3 originPos = gScene.camera.getPosition();  //For ray dist
+    CausticSurface causticSurface;
     
     for (uint i = 0; i <= gMaxBounces; i++)
     {
@@ -139,10 +142,12 @@ void rayGen()
             break;
 
         ShadingData sd = loadShadingData(hitInfo, -viewDir);
-        rayDist = distance(originPos, sd.posW);
+        rayDist += distance(originPos, sd.posW);
         
-        //let bsdf = gScene.materials.getMaterialInstance(sd, lod, hints);
-        //let bsdfProperties = bsdf.getProperties(sd);
+        if(i == 0 && kTemporalFilterEnabled){
+            causticSurface.normal = sd.faceN;
+            causticSurface.viewDepth = rayDist;
+        }
 
         if (i == gMaxBounces)
             break;
@@ -179,6 +184,11 @@ void rayGen()
 
         TraceRay(gScene.rtAccel, 0, 0xff /* instanceInclusionMask */, 0 /* hitIdx */, rayTypeCount, 0 /* missIdx */, tRay, traceData);
 
+        //Set is delta flag on caustic surface
+        if(i == 0 && kTemporalFilterEnabled){
+            causticSurface.isDelta = true;
+        }
+        
         //Update info
         hitInfo = HitInfo(traceData.packedHitInfo);
         viewDir = -bsdfSample.wi;  
@@ -196,7 +206,8 @@ void rayGen()
         }
         
     }
-    
+
+    if(kTemporalFilterEnabled) gPackedCausticSurface[launchIndex] = causticSurface.pack();
     //Write ReSTIR Buffer
     gOutVBufferReSTIR[launchIndex] = reStirHitInfo.pack();
     gOutViewDirReSTIRPrev[launchIndex] = gOutViewDirReSTIR[launchIndex];

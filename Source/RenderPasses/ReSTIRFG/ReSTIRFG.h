@@ -254,6 +254,7 @@ private:
     Texture::SharedPtr mpViewDirPrev;         //Previous View dir
     Texture::SharedPtr mpRayDist;             //Ray distance (needed for highly specular and transparent materials)
     Texture::SharedPtr mpThp;                 //Throughput
+    Texture::SharedPtr mpTemporalCausticSurface[2];   //Small buffer for surface rejection of temporal samples
 
     //
     //Render Passes/Programms
