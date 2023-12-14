@@ -208,7 +208,7 @@ private:
     uint2 mNumMaxPhotonsUI = mNumMaxPhotons;
     uint2 mCurrentPhotonCount = uint2(1000000, 1000000);            // Gets data from GPU buffer
     float mASBuildBufferPhotonOverestimate = 1.15f;
-    float2 mPhotonCollectionRadiusStart = float2(0.025f, 0.005f);
+    float2 mPhotonCollectionRadiusStart = float2(0.02f, 0.005f);
     float2 mPhotonCollectRadius = mPhotonCollectionRadiusStart;     // Radius for collection
     bool mChangePhotonLightBufferSize = false;
     bool mPhotonUseAlphaTest = true;
