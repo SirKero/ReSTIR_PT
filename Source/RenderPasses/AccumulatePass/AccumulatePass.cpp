@@ -26,6 +26,8 @@
  # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  **************************************************************************/
 #include "AccumulatePass.h"
+#include <fmt/format.h>
+#include <sstream>
 
 // Don't remove this. it's required for hot-reload to function properly
 extern "C" __declspec(dllexport) const char* getProjDir()
@@ -231,6 +233,9 @@ void AccumulatePass::execute(RenderContext* pRenderContext, const RenderData& re
     else if (resolutionMatch)
     {
         accumulate(pRenderContext, pSrc, pDst);
+        if (mUseExportImage && mStartExporting) {
+            exportImage(pRenderContext, pDst);
+        }
     }
     else
     {
@@ -320,6 +325,38 @@ void AccumulatePass::accumulate(RenderContext* pRenderContext, const Texture::Sh
     }
 }
 
+void AccumulatePass::exportImage(RenderContext* pRenderContext, const Texture::SharedPtr& pDst) {
+    pRenderContext->uavBarrier(pDst.get());
+
+    if (mFolderPathStr.compare("") == 0) {
+        mStartExporting = false;
+        return;
+    }
+
+    //Skip steps
+    bool skipped = false;
+    for (uint i = 0; i < mSkipItCount.size(); i++) {
+        if (mSkipItStart[i] < 0)
+            continue;
+
+        if (uint(mSkipItStart[i]) <= mFrameCount) {
+            if (mFrameCount % mSkipItCount[i] != 0) {
+                return;
+            }
+            break;
+        }
+    }
+
+    std::stringstream stream;
+    stream << mFolderPathStr << "\\" << mFileName;
+    stream << std::setfill('0') << std::setw(5) << mFrameCount;
+    stream << ".exr";
+    std::filesystem::path path = stream.str();
+
+    pDst->captureToFile(0, 0, path.string(), Bitmap::FileFormat::ExrFile, Bitmap::ExportFlags::None);
+
+}
+
 void AccumulatePass::renderUI(Gui::Widgets& widget)
 {
     // Controls for output size.
@@ -361,6 +398,22 @@ void AccumulatePass::renderUI(Gui::Widgets& widget)
 
         const std::string text = std::string("Frames accumulated ") + std::to_string(mAccumFrameCount);
         widget.text(text);
+
+        widget.checkbox("Use Export images", mUseExportImage);
+        if (mUseExportImage) {
+            //Export settings
+            widget.textbox("StorePath", mFolderPathStr, Gui::TextFlags::FitWindow);
+            widget.textbox("FileName", mFileName, Gui::TextFlags::FitWindow);
+
+            for (uint i = 0; i < mSkipItCount.size(); i++) {
+                std::string name = "Start" + std::to_string(mSkipItCount[i]) + "steps";
+                widget.var(name.c_str(), mSkipItStart[i], -1);
+            }
+
+            //Reset if export started
+            if (widget.checkbox("Start Exporting", mStartExporting))
+                reset();
+        }
     }
 }
 
