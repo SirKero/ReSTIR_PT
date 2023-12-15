@@ -351,7 +351,7 @@ void rayGen()
     pls.flux /= launchDim.x * launchDim.y; //Division through all dipatched photons
 
     ray.Origin = pls.posW;
-    ray.TMin = 0.001f;
+    ray.TMin = 0.1f;
     ray.TMax = 10000.f;
     
     //create photon
@@ -442,6 +442,8 @@ void rayGen()
         }
                         
         //update ray for next iteration
+        
+        ray.TMin = 0.0f;
         ray.Origin = rayData.origin;
         ray.Direction = rayData.direction;
     }

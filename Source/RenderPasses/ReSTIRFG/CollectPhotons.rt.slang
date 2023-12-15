@@ -494,6 +494,7 @@ void rayGen()
 
         uint materialID = gScene.getMaterialID(triangleHit.instanceID);
         sd = prepareShadingData(v, materialID, gScene.materials[materialID], gScene.materialResources[materialID], -ray.Direction, 0.f);
+        adjustShadingNormal(sd, v);
         
         uint lobeTypes = sd.getActiveLobes();
         bool hasDiffuseParts = true;
