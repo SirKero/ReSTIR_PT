@@ -174,7 +174,9 @@ void rayGen()
     
     if (hitInfo.isValid())
     {
-        float3 view = -gView[launchIndex].xyz;
+        float4 viewTmp = gView[launchIndex];
+        float3 view = -viewTmp.xyz;
+        bool additionalCullingMark = viewTmp.w == 0;    //Flag for the directly collected photons 
         float viewDepth = gLinZ[launchIndex];
         ShadingData sd = loadShadingData(hitInfo, view);
         
@@ -214,8 +216,11 @@ void rayGen()
             if (kUsePhotonCulling)
             {
                 photonCulling(hitPos,gCollectionRadius.x);
-                if(kUseCausticPhotons)
-                    photonCulling(sd.posW, gCollectionRadius.y);
+                if(kUseCausticPhotons || additionalCullingMark)
+                {
+                    float radius = additionalCullingMark ? gCollectionRadius.x : gCollectionRadius.y;
+                    photonCulling(sd.posW, radius);
+                }  
             }
         }
 
