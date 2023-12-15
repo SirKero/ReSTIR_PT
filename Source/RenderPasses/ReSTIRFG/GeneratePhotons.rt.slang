@@ -5,6 +5,7 @@ import Scene.Raytracing;
 import Utils.Math.PackedFormats;
 import Utils.Math.FormatConversion;
 import Utils.Math.MathHelpers;
+import Utils.Geometry.GeometryHelpers;
 import Scene.HitInfo;
 import Rendering.Materials.StandardMaterial;
 import Rendering.Materials.ClothMaterial;
@@ -34,7 +35,8 @@ cbuffer CB
     uint gFlags;       //Flags for the pass. See GenerationFlags enum
     uint gHashSize;     //Size is always 2^x
     int gCausticsBounces;    //Number of diffuse bounces allowed for caustic photons
-    uint3 _pad;
+    float gGenerationLampIntersectGuard;    //Guard for the first hit of photons
+    uint2 _pad;
 };
 
 #if USE_EMISSIVE_LIGHT  //Buffer is only valid if emissive light is enabled
@@ -81,8 +83,8 @@ struct RayData
     uint terminated; ///< Set to true when path is terminated.
     float3  direction;      ///< Next path segment direction.
     bool    diffuseHit;     ///< saves if the his is diffuse
-    float3 diffuseScalar;
     bool isEmissive;        ///<If the hit is emissive
+    float distance;         ///<Distance of the photon path
 
     SampleGenerator sg;     ///< Per-ray state for the sample generator (up to 16B).
 
@@ -97,6 +99,7 @@ struct RayData
         d.origin = float3(0);
         d.direction = float3(0);
         d.isEmissive = false;
+        d.distance = 0.f;
         return d;
     }
 };
@@ -176,6 +179,7 @@ bool createLightSample(inout SampleGenerator sg, out PhotonLightSample pls ){
     }
     */
 
+    pls.posW = computeRayOrigin(pls.posW, pls.normal);
     pls.flux /= triangleSelectionPdf;
 
     return true;
@@ -279,6 +283,7 @@ void closestHit(inout RayData rayData : SV_RayPayload, BuiltInTriangleIntersecti
     rayData.packedNormal = encodeNormal2x8(sd.faceN);
     rayData.direction = bsdfSample.wi;
     rayData.isEmissive = luminance(sd.emissive) > 0;
+    rayData.distance += RayTCurrent();
     if (gFlags & (uint) GenerationFlags::DeltaRejection)
         rayData.diffuseHit = bsdfSample.isLobe(LobeType::NonDeltaReflection) && hasDiffuseParts;
     else
@@ -351,7 +356,7 @@ void rayGen()
     pls.flux /= launchDim.x * launchDim.y; //Division through all dipatched photons
 
     ray.Origin = pls.posW;
-    ray.TMin = 0.1f;
+    ray.TMin = 0.0f;
     ray.TMax = 10000.f;
     
     //create photon
@@ -386,7 +391,9 @@ void rayGen()
         //rejection
         float rndRoulette = sampleNext1D(rayData.sg);
         bool roulette = rndRoulette <= gRejection;
-              
+        if(rayData.distance < gGenerationLampIntersectGuard)
+            roulette = false;
+        
         //store photon light
         if (reflectedDiffuse && (roulette || storeAsCaustic))
         {
@@ -442,8 +449,6 @@ void rayGen()
         }
                         
         //update ray for next iteration
-        
-        ray.TMin = 0.0f;
         ray.Origin = rayData.origin;
         ray.Direction = rayData.direction;
     }
