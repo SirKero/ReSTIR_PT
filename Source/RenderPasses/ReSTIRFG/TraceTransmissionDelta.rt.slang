@@ -129,6 +129,7 @@ void rayGen()
     float3 reStirViewDir =  viewDir;
     float3 thpReSTIR = thp;
     bool validSurfaceForReStir = true;
+    uint bouncesAfterValid = 0;
     
     TraceData traceData = TraceData::create();
     traceData.sg = SampleGenerator(launchIndex, gFrameCount + 7 * 13);
@@ -203,7 +204,8 @@ void rayGen()
             }else{
                 validSurfaceForReStir = false;
             }
-        }
+        }else
+            bouncesAfterValid++;
         
     }
 
@@ -215,7 +217,7 @@ void rayGen()
     
     //Write
     gOutVBuffer[launchIndex] = hitInfo.pack();
-    gOutViewDir[launchIndex] = float4(viewDir, validSurfaceForReStir ? 1 : 0);
+    gOutViewDir[launchIndex] = float4(viewDir, validSurfaceForReStir ? 0 : bouncesAfterValid + 1); //Store a flag if this surface has direct light
     gOutRayDist[launchIndex] = rayDist;
 
     if(any(isnan(thp)) || any(isinf(thp)))

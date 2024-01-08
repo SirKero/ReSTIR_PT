@@ -352,7 +352,8 @@ void rayGen()
 
     float4 viewTmp =gView[launchIndex];
     float3 view = -viewTmp.xyz;
-    bool collectDirect = viewTmp.w == 0;
+    bool collectDirect = viewTmp.w > 0.1;
+    bool collectEmissive = viewTmp.w > 1.1;
     
     ShadingData fgSD = {};
     if(valid){
@@ -416,7 +417,7 @@ void rayGen()
                 rayData.countPhotons = 0; //delete flag
                 causticRadiance += w * rayData.radiance;
         #endif // USE_STOCHASTIC_COLLECT
-            causticRadiance += fgSD.emissive; //Add emissive to caustic to filter
+            if(collectEmissive) causticRadiance += fgSD.emissive; //Add emissive to caustic to filter
             causticRadiance *= thp;
         }
     }
