@@ -6,6 +6,7 @@ import Utils.Math.FormatConversion;
 
 import Scene.RaytracingInline;
 import Utils.Sampling.SampleGenerator;
+import Utils.Geometry.GeometryHelpers;
 import Utils.Math.MathHelpers;
 import Utils.Color.ColorHelpers;
 
@@ -66,6 +67,7 @@ struct PhotonLight{
 };
 
 static const float kRayEpsilon = 0.99f;
+static const float kRayNearEpsilon = 0.01f;
 
 uint index2Dto1D(uint2 idx, uint width){
     return idx.x + width * idx.y;
@@ -203,16 +205,18 @@ void temporalResampling(uint2 pixel, inout Reservoir r, inout FGData fgSample, i
     if (foundTemporalSurface)
     {
         LightSample ls = { };
-        float distance = 0;
-        bool valid = getLightSample(fgSample, temporalSurface.posW, ls, distance);
+        float dist = 0;
+        bool valid = getLightSample(fgSample, temporalSurface.posW, ls, dist);
         float ps = valid ? temporalSurface.getPdf(ls.dir, ls.Li) : 0.f;
 
 #if BIAS_CORRECTION_MODE >= BIAS_MODE_RAYTRACE
         if (ps > 0)
         {
-            SceneRayQuery < 0 > rayQuery;
-            distance *= kRayEpsilon;
-            const RayDesc ray = { temporalSurface.posW, 0.0f, ls.dir, distance };
+             SceneRayQuery < 0 > rayQuery;
+             dist *= kRayEpsilon;
+             float rayNear = dist * kRayNearEpsilon;
+             dist -= rayNear;
+             const RayDesc ray = { computeRayOrigin(temporalSurface.posW, temporalSurface.normal), rayNear, ls.dir, dist };
             if (!rayQuery.traceVisibilityRay(ray, RAY_FLAG_NONE, 0xff))
             {
                 ps = 0;
@@ -335,7 +339,9 @@ void spatialResampling(uint2 pixel, inout Reservoir r, inout FGData fgSample, in
             {
                 SceneRayQuery < 0 > rayQuery;
                 dist *= kRayEpsilon;
-                const RayDesc ray = { biasSurface.posW, 0.0f, ls.dir, dist };
+                float rayNear = dist * kRayNearEpsilon;
+                dist -= rayNear;
+                const RayDesc ray = { computeRayOrigin(biasSurface.posW, biasSurface.normal), rayNear, ls.dir, dist };
                 if (!rayQuery.traceVisibilityRay(ray, RAY_FLAG_CULL_NON_OPAQUE, 0xff))
                 {
                     ps = 0.0f;
@@ -526,7 +532,9 @@ void spatiotemporalResampling(uint2 pixel, inout Reservoir r, inout FGData fgSam
             {
                 SceneRayQuery < 0 > rayQuery;
                 dist *= kRayEpsilon;
-                const RayDesc ray = { biasSurface.posW, 0.0f, ls.dir, dist };
+                float rayNear = dist * kRayNearEpsilon;
+                dist -= rayNear;
+                const RayDesc ray = { computeRayOrigin(biasSurface.posW, biasSurface.normal), rayNear, ls.dir, dist };
                 if (!rayQuery.traceVisibilityRay(ray, RAY_FLAG_CULL_NON_OPAQUE, 0xff))
                 {
                     ps = 0.0f;
