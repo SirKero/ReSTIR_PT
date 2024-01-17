@@ -305,7 +305,7 @@ void VideoRecorder::renderUI(Gui::Widgets& widget)
 void VideoRecorder::setScene(RenderContext* pRenderContext, const Scene::SharedPtr& pScene)
 {
     mpScene = pScene;
-    mSceneDir = ".";
+    mSceneDir = "camPaths";
 
     refreshFileList();
 }
@@ -619,9 +619,8 @@ void VideoRecorder::stopRender()
 
         auto err = _pclose(ffmpeg);
         deleteFolder(outputName); // delete the temporary files
-        if (err)
-        
-            logError("Error while executing ffmpeg. Put ffmpeg in \"Source/Mogwai\".\n");
+        if (err){
+            logError("Error while executing ffmpeg. Put ffmpeg in \"Source/Mogwai\" \n");
         }
     }
 }

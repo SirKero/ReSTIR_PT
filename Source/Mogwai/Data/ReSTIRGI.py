@@ -1,7 +1,7 @@
 from falcor import *
 
-def render_graph_ReSTIR_FG():
-    g = RenderGraph('ReSTIR_FG')
+def render_graph_ReSTIR_GI():
+    g = RenderGraph('ReSTIR_GI')
     loadRenderPassLibrary('AccumulatePass.dll')
     loadRenderPassLibrary('ReSTIR_GI.dll')
     loadRenderPassLibrary('ScreenSpaceReSTIRPass.dll')
@@ -42,7 +42,7 @@ def render_graph_ReSTIR_FG():
     
     return g
 
-ReSTIR_FG = render_graph_ReSTIR_FG()
-try: m.addGraph(ReSTIR_FG)
+ReSTIR_GI = render_graph_ReSTIR_GI()
+try: m.addGraph(ReSTIR_GI)
 except NameError: None
 

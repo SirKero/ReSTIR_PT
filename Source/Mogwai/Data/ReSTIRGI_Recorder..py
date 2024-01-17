@@ -1,20 +1,21 @@
 from falcor import *
 
-def render_graph_ReSTIR_FG():
-    g = RenderGraph('ReSTIR_FG')
+def render_graph_ReSTIR_GI():
+    g = RenderGraph('ReSTIR_GI')
     loadRenderPassLibrary('AccumulatePass.dll')
-    loadRenderPassLibrary('ReSTIRFG.dll')
+    loadRenderPassLibrary('ReSTIR_GI.dll')
     loadRenderPassLibrary('ScreenSpaceReSTIRPass.dll')
     loadRenderPassLibrary('GBuffer.dll')
     loadRenderPassLibrary('ToneMapper.dll')
     loadRenderPassLibrary('Utils.dll')
+    loadRenderPassLibrary('VideoRecorder.dll')
     
     VBufferRT = createPass("VBufferRT", {'samplePattern': SamplePattern.Center, 'sampleCount': 1, 'texLOD': TexLODMode.Mip0, 'useAlphaTest': True})
     g.addPass(VBufferRT, 'VBufferRT')
     AccumulatePass = createPass('AccumulatePass', {'enabled': True, 'outputSize': IOSize.Default, 'autoReset': True, 'precisionMode': AccumulatePrecision.Double, 'subFrameCount': 0, 'maxAccumulatedFrames': 0})
     g.addPass(AccumulatePass, 'AccumulatePass')
-    ReSTIRFG = createPass('ReSTIRFG')
-    g.addPass(ReSTIRFG, 'ReSTIRFG')
+    ReSTIR_GI = createPass('ReSTIR_GI')
+    g.addPass(ReSTIR_GI, 'ReSTIR_GI')
     ToneMapper = createPass("ToneMapper", {'autoExposure': False, 'exposureCompensation': 0.0, 'operator': ToneMapOp.Linear})
     g.addPass(ToneMapper, 'ToneMapper')
     ScreenSpaceReSTIRPass = createPass("ScreenSpaceReSTIRPass")    
@@ -22,16 +23,20 @@ def render_graph_ReSTIR_FG():
     Composite = createPass('Composite', {'mode': CompositeMode.Add, 'scaleA': 1.0, 'scaleB': 1.0, 'outputFormat': ResourceFormat.RGBA32Float})
     g.addPass(Composite, 'Composite')
     
-    g.addEdge('VBufferRT.vbuffer', 'ReSTIRFG.vbuffer')
-    g.addEdge('VBufferRT.mvec', 'ReSTIRFG.mvec')
-        
-    g.addEdge("ReSTIRFG.vbufferOut", "ScreenSpaceReSTIRPass.vbuffer")   
-    g.addEdge("VBufferRT.mvec", "ScreenSpaceReSTIRPass.motionVectors")
-    g.addEdge("ReSTIRFG.thp", "ScreenSpaceReSTIRPass.throughput")    
-    g.addEdge("ReSTIRFG.view", "ScreenSpaceReSTIRPass.view")  
-    g.addEdge("ReSTIRFG.prevView", "ScreenSpaceReSTIRPass.prevView")        
+    VideoRecorder = createPass('VideoRecorder')
+    g.addPass(VideoRecorder, 'VideoRecorder')
     
-    g.addEdge('ReSTIRFG.color', 'Composite.A')
+    g.addEdge('VideoRecorder', 'VBufferRT')
+    g.addEdge('VBufferRT.vbuffer', 'ReSTIR_GI.vbuffer')
+    g.addEdge('VBufferRT.mvec', 'ReSTIR_GI.mvec')
+        
+    g.addEdge("ReSTIR_GI.vbufferOut", "ScreenSpaceReSTIRPass.vbuffer")   
+    g.addEdge("VBufferRT.mvec", "ScreenSpaceReSTIRPass.motionVectors")
+    g.addEdge("ReSTIR_GI.thp", "ScreenSpaceReSTIRPass.throughput")    
+    g.addEdge("ReSTIR_GI.view", "ScreenSpaceReSTIRPass.view")  
+    g.addEdge("ReSTIR_GI.prevView", "ScreenSpaceReSTIRPass.prevView")        
+    
+    g.addEdge('ReSTIR_GI.color', 'Composite.A')
     g.addEdge('ScreenSpaceReSTIRPass.color', 'Composite.B')
     g.addEdge('Composite.out', 'AccumulatePass.input')
     
@@ -42,6 +47,7 @@ def render_graph_ReSTIR_FG():
     
     return g
 
-ReSTIR_FG = render_graph_ReSTIR_FG()
-try: m.addGraph(ReSTIR_FG)
+ReSTIR_GI = render_graph_ReSTIR_GI()
+try: m.addGraph(ReSTIR_GI)
 except NameError: None
+

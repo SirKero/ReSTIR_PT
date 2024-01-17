@@ -15,7 +15,7 @@ Bin/*
 *.mp4
 Source/Externals/.packman/*
 Source/Mogwai/ffmpeg.exe
-Source/Mogwai/videos/*
+Source/Mogwai/videos/*.mp4
 Media
 Tools/.packman
 Tests/data

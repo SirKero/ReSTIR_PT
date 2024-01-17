@@ -8,6 +8,7 @@ def render_graph_ReSTIR_FG():
     loadRenderPassLibrary('GBuffer.dll')
     loadRenderPassLibrary('ToneMapper.dll')
     loadRenderPassLibrary('Utils.dll')
+    loadRenderPassLibrary('VideoRecorder.dll')
     
     VBufferRT = createPass("VBufferRT", {'samplePattern': SamplePattern.Center, 'sampleCount': 1, 'texLOD': TexLODMode.Mip0, 'useAlphaTest': True})
     g.addPass(VBufferRT, 'VBufferRT')
@@ -22,6 +23,10 @@ def render_graph_ReSTIR_FG():
     Composite = createPass('Composite', {'mode': CompositeMode.Add, 'scaleA': 1.0, 'scaleB': 1.0, 'outputFormat': ResourceFormat.RGBA32Float})
     g.addPass(Composite, 'Composite')
     
+    VideoRecorder = createPass('VideoRecorder')
+    g.addPass(VideoRecorder, 'VideoRecorder')
+    
+    g.addEdge('VideoRecorder', 'VBufferRT')
     g.addEdge('VBufferRT.vbuffer', 'ReSTIRFG.vbuffer')
     g.addEdge('VBufferRT.mvec', 'ReSTIRFG.mvec')
         
