@@ -44,6 +44,8 @@ namespace Falcor
     */
     static const char kRenderPassRefreshFlags[] = "_refreshFlags";
 
+    static const char kRenderGraph[] = "_renderGraph";
+
     /** First available preudorandom number generator dimension.
     */
     static const char kRenderPassPRNGDimension[] = "_prngDimension";

@@ -567,6 +567,7 @@ namespace Mogwai
 
         // Execute graph.
         (*pGraph->getPassesDictionary())[kRenderPassRefreshFlags] = RenderPassRefreshFlags::None;
+        (*pGraph->getPassesDictionary())[kRenderGraph] = pGraph.get();
         pGraph->execute(pRenderContext);
     }
 
