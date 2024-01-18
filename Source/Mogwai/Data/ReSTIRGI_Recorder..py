@@ -26,7 +26,6 @@ def render_graph_ReSTIR_GI():
     VideoRecorder = createPass('VideoRecorder')
     g.addPass(VideoRecorder, 'VideoRecorder')
     
-    g.addEdge('VideoRecorder', 'VBufferRT')
     g.addEdge('VBufferRT.vbuffer', 'ReSTIR_GI.vbuffer')
     g.addEdge('VBufferRT.mvec', 'ReSTIR_GI.mvec')
         
@@ -41,6 +40,8 @@ def render_graph_ReSTIR_GI():
     g.addEdge('Composite.out', 'AccumulatePass.input')
     
     g.addEdge('AccumulatePass.output', 'ToneMapper.src')
+    
+     g.addEdge('ToneMapper', 'VideoRecorder')
     
     g.markOutput('ToneMapper.dst')
     g.markOutput('AccumulatePass.output')

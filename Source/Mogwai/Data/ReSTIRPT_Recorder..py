@@ -26,8 +26,6 @@ def render_graph_ReSTIRPT():
     VideoRecorder = createPass('VideoRecorder')
     g.addPass(VideoRecorder, 'VideoRecorder')
     
-    g.addEdge('VideoRecorder', 'VBufferRT')
-    
     g.addEdge("VBufferRT.vbuffer", "ReSTIRPTPass.vbuffer")   
     g.addEdge("VBufferRT.mvec", "ReSTIRPTPass.motionVectors")    
     
@@ -38,9 +36,11 @@ def render_graph_ReSTIRPT():
     g.addEdge("ReSTIRPTPass.color", "AccumulatePass.input")
     g.addEdge("AccumulatePass.output", "ToneMapper.src")
     
+    g.addEdge('ToneMapper', 'VideoRecorder')
+    
     g.markOutput("ToneMapper.dst")
     g.markOutput("AccumulatePass.output")  
-
+    
     return g
 
 graph_ReSTIRPT = render_graph_ReSTIRPT()
