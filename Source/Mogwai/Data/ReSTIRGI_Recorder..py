@@ -41,7 +41,7 @@ def render_graph_ReSTIR_GI():
     
     g.addEdge('AccumulatePass.output', 'ToneMapper.src')
     
-     g.addEdge('ToneMapper', 'VideoRecorder')
+    g.addEdge('ToneMapper', 'VideoRecorder')
     
     g.markOutput('ToneMapper.dst')
     g.markOutput('AccumulatePass.output')
