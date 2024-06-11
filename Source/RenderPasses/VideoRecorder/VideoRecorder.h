@@ -36,6 +36,7 @@ struct PathPoint
 {
     float3 pos;
     float3 dir;
+    float3 up;
     float time;
 };
 
@@ -72,6 +73,13 @@ public:
     virtual bool onKeyEvent(const KeyboardEvent& keyEvent) override { return false; }
 
 private:
+    struct PathPointPre1_0
+    {
+        float3 pos;
+        float3 dir;
+        float time;
+    };
+
     Scene::SharedPtr mpScene;
     std::string mSceneDir = "."; // WD
 
@@ -90,6 +98,8 @@ private:
     void startWarmup();
     void stopWarmup();
     void smoothPath();
+
+    double getStartTime();
 
     void savePath(const std::string& filename) const;
     void loadPath(const std::string& filename);
@@ -118,6 +128,9 @@ private:
     std::string mOutputFilter;
     std::string mOutputPrefixFolder = "videos";
     std::string mOutputPrefix;
+
+    PathPoint mLastFramePathPoint;
+    bool mLastFramePathPointValid = false;
 
     int guardBand = 0;
     Texture::SharedPtr mpBlitTexture;

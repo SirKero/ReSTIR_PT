@@ -35,7 +35,8 @@
 
 namespace
 {
-    const char kDesc[] = "A Video Recorder";    
+    const char kDesc[] = "A Video Recorder";
+    const std::string kVersionControlHeader = "VideoRecorderVersion1_0";
 }
 
 // Don't remove this. it's required for hot-reload to function properly
@@ -418,30 +419,61 @@ void VideoRecorder::updateCamera()
 
     // helper function to get the interpolated path point based on time
     auto getInterpolatedPathPoint = [&](float time)
-    {
-        assert(mPathPoints.size());
-        const auto& path = mSmoothPoints.empty() ? mPathPoints : mSmoothPoints;
-
-        auto step2 = std::find_if(path.begin(), path.end(), [time](const PathPoint& p) { return p.time >= time; });
-        if (step2 == path.end())
         {
-            return path.back();
+            assert(mPathPoints.size());
+            const auto& path = mSmoothPoints.empty() ? mPathPoints : mSmoothPoints;
+
+            auto step2 = std::find_if(path.begin(), path.end(), [time](const PathPoint& p) { return p.time >= time; });
+            if (step2 == path.end())
+            {
+                return path.back();
+            }
+
+            auto step1 = step2;
+            if (step1 != path.begin()) --step1; // move to previous step
+
+            // interpolate position
+            float t = (time - step1->time) / (step2->time - step1->time);
+            if (step1->time >= step2->time) t = 1.0; // in case step1 == step2
+
+            PathPoint res;
+            res.time = time;
+            res.pos = lerp(step1->pos, step2->pos, t);
+            res.dir = lerp(step1->dir, step2->dir, t);
+            res.up = normalize(lerp(step1->up, step2->up, t));
+            return res;
+        };
+
+    auto testError = [&](float3 val, float error) {
+        bool valid = false;
+        for (uint i = 0; i < 3; i++)
+            valid |= val[i] < error;
+        
+        return valid;
+       };
+    auto updateCamera = [&](const PathPoint& curr) {
+        bool updatePoint = true;
+        /*
+        if (!mLastFramePathPointValid)
+        {
+            mLastFramePathPoint = curr;
+            mLastFramePathPointValid = true;
+            updatePoint = true;
         }
 
-        auto step1 = step2;
-        if (step1 != path.begin()) --step1; // move to previous step
+        const float error = 0.00001f;
 
-        // interpolate position
-        float t = (time - step1->time) / (step2->time - step1->time);
-        if (step1->time >= step2->time) t = 1.0; // in case step1 == step2
+        updatePoint |= testError(abs(mLastFramePathPoint.pos - curr.pos) , error);
+        auto lastTarget = mLastFramePathPoint.pos + mLastFramePathPoint.dir;
+        auto currentTarget = curr.pos + curr.dir;
+        updatePoint |= testError(abs(lastTarget - currentTarget) , error);
+        updatePoint |= testError(abs(mLastFramePathPoint.pos - curr.pos) , error);
 
-        PathPoint res;
-        res.time = time;
-        res.pos = lerp(step1->pos, step2->pos, t);
-        res.dir = lerp(step1->dir, step2->dir, t);
-        return res;
-    };
-
+        if (updatePoint)
+            mLastFramePathPoint = curr;
+        */
+        return updatePoint;
+        };
 
     switch (mState)
     {
@@ -451,13 +483,18 @@ void VideoRecorder::updateCamera()
     case State::Preview:
     {
         auto p = getInterpolatedPathPoint(time);
-        cam->setPosition(p.pos);
-        cam->setTarget(p.pos + p.dir);
+        if (updateCamera(p))
+        {
+            cam->setPosition(p.pos);
+            cam->setTarget(p.pos + p.dir);
+            cam->setUpVector(p.up);
+        }
+
         if (p.time >= mPathPoints.back().time)
         {
             if (mLoop)
             {
-                mClock.setTime(0.0);
+                mClock.setTime(getStartTime());
             }
             else // stop animation
                 stopPreview();
@@ -467,8 +504,13 @@ void VideoRecorder::updateCamera()
     case State::Render:
     {
         auto p = getInterpolatedPathPoint(time);
-        cam->setPosition(p.pos);
-        cam->setTarget(p.pos + p.dir);
+        if (updateCamera(p))
+        {
+            cam->setPosition(p.pos);
+            cam->setTarget(p.pos + p.dir);
+            cam->setUpVector(p.up);
+        }
+
         if (p.time >= mPathPoints.back().time)
         {
             // stop animation
@@ -481,8 +523,13 @@ void VideoRecorder::updateCamera()
         size_t warmupFrames = 120;
         float t = 1.0f - (float)mRenderIndex / (float)warmupFrames;
         auto p = getInterpolatedPathPoint(t); // fix some issues with temporal passes 
-        cam->setPosition(p.pos);
-        cam->setTarget(p.pos + p.dir);
+        if (updateCamera(p))
+        {
+            cam->setPosition(p.pos);
+            cam->setTarget(p.pos + p.dir);
+            cam->setUpVector(p.up);
+        }
+
         if (mRenderIndex++ > warmupFrames)
         {
             startRender(); // after 100 warmup frames, start rendering
@@ -501,7 +548,7 @@ void VideoRecorder::startRecording()
     mPathPoints.clear();
     mSmoothPoints.clear();
     mClock.play();
-    mClock.setTime(0);
+    mClock.setTime(getStartTime());
     mClock.setFramerate(0); // disabled framerate for record
 }
 
@@ -512,7 +559,7 @@ void VideoRecorder::startPreview()
 
     mState = State::Preview;
     mClock.play();
-    mClock.setTime(0);
+    mClock.setTime(getStartTime());
     mClock.setFramerate(0); // disabled framerate for preview
 }
 
@@ -523,7 +570,7 @@ void VideoRecorder::startRender()
 
     mState = State::Render;
     mClock.play();
-    mClock.setTime(0);
+    mClock.setTime(getStartTime());
     mClock.setFramerate(mFps); // use framerate for render
     mRenderIndex = 0;
 }
@@ -681,6 +728,8 @@ void VideoRecorder::savePath(const std::string& filename) const
     std::ofstream outFile(filename, std::ios::binary);
     if (outFile.is_open())
     {
+        //Write header
+        outFile.write(kVersionControlHeader.c_str(), kVersionControlHeader.size());
         for (const auto& point : path) {
             outFile.write(reinterpret_cast<const char*>(&point), sizeof(PathPoint));
         }
@@ -692,18 +741,61 @@ void VideoRecorder::loadPath(const std::string& filename)
 {
     forceIdle();
 
+    //Convert old format to the new one that includes the up vector
+    auto convertPathPointFormat = [](PathPointPre1_0& oldPoint) {
+        PathPoint p;
+        p.dir = oldPoint.dir;
+        p.pos = oldPoint.pos;
+        p.time = oldPoint.time;
+        p.up = float3(0, 1, 0);
+        return p;
+        };
+
     mPathPoints.clear();
     std::ifstream inFile(filename, std::ios::binary);
     if (inFile.is_open())
     {
-        PathPoint point;
-        while (inFile.read(reinterpret_cast<char*>(&point), sizeof(PathPoint))) {
-            mPathPoints.push_back(point);
+        bool isPre1_0 = false;  //If pre 1_0, it has no up vector
+        //Read header
+        std::vector<char> headerChecker(kVersionControlHeader.size());
+        if (inFile.read(headerChecker.data(), kVersionControlHeader.size()))
+        {
+            for (uint32_t i = 0; i < headerChecker.size(); i++)
+            {
+                if (headerChecker[i] != kVersionControlHeader[i])
+                {
+                    isPre1_0 = true;
+                    //Return to start of file
+                    inFile.clear();
+                    inFile.seekg(0);
+                    logInfo("Old path file format detected. Will be converted!");
+                    break;
+                }
+            }
         }
+
+        if (isPre1_0)
+        {
+            PathPointPre1_0 point;
+            while (inFile.read(reinterpret_cast<char*>(&point), sizeof(PathPointPre1_0)))
+            {
+                mPathPoints.push_back(convertPathPointFormat(point));
+            }
+        }
+        else
+        {
+            PathPoint point;
+            while (inFile.read(reinterpret_cast<char*>(&point), sizeof(PathPoint)))
+            {
+                mPathPoints.push_back(point);
+            }
+        }
+
         inFile.close();
     }
     else logError("Cannot open camera path file!");
 }
+
 
 void VideoRecorder::refreshFileList()
 {
@@ -738,4 +830,12 @@ void VideoRecorder::forceIdle()
     }
 
     assert(mState == State::Idle);
+}
+
+double VideoRecorder::getStartTime()
+{
+    if (mPathPoints.size() > 0)
+        return static_cast<double>(mPathPoints[0].time);
+    else
+        return 0.0;
 }
